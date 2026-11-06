@@ -204,6 +204,10 @@ export class Renderer {
           this.flashColor = '255,255,255';
           break;
         }
+        case 'unseal':
+          this.ring(e.x, e.y, 4, 150, 0.8, '#ff4d3d', 3);
+          this.showTitle('The Worldheart opens', s.region.name);
+          break;
         case 'wave':
           break;
         case 'mine': {
@@ -488,10 +492,11 @@ export class Renderer {
       const x = p.wx[p.core];
       const y = p.wy[p.core];
       const health = p.hp[p.core] / p.maxHp[p.core];
-      const pump = 1 + 0.08 * Math.max(0, Math.sin(this.time * 5)) ** 3;
+      // Sealed, it sits grey and still. Open, it beats.
+      const pump = p.coreOpen ? 1 + 0.08 * Math.max(0, Math.sin(this.time * 5)) ** 3 : 1;
       ctx.lineWidth = 1.8 / this.zoom;
-      ctx.strokeStyle = '#ff4d3d';
-      ctx.fillStyle = `rgba(255,77,61,${0.2 + 0.25 * (1 - health)})`;
+      ctx.strokeStyle = p.coreOpen ? '#ff4d3d' : '#8a95a3';
+      ctx.fillStyle = p.coreOpen ? `rgba(255,77,61,${0.2 + 0.25 * (1 - health)})` : 'rgba(138,149,163,0.14)';
       for (let r = 0; r < 3; r++) {
         ctx.beginPath();
         hexPath(ctx, x, y, size * pump * (1 - r * 0.28));
@@ -785,7 +790,7 @@ export class Renderer {
     ctx.globalCompositeOperation = 'source-over';
 
     if (s.waypoint) {
-      ctx.strokeStyle = `rgba(159,232,255,${Math.min(1, s.waypoint.left)})`;
+      ctx.strokeStyle = `rgba(159,232,255,0.9)`;
       ctx.lineWidth = 1.5 / this.zoom;
       const t = this.time * 3;
       ctx.beginPath();

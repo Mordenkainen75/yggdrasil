@@ -1,4 +1,4 @@
-import { BLOCK, RAVENS, SAVE_KEY } from './config.ts';
+import { SAVE_KEY } from './config.ts';
 import { makeRegion, regionSeed } from './region.ts';
 import { makeShip, newGame, placeShip, resetTrail, startUpgrades, zeroRunes, zeroPerks, type GameState } from './state.ts';
 import type { RuneId, UpgradeId } from './config.ts';
@@ -114,8 +114,6 @@ export function deserialize(text: string): GameState | null {
       p.kind[cell] = f.kind[n];
       p.hp[cell] = f.hp[n];
       p.seen[cell] = f.seen.charCodeAt(n) === 49 ? 1 : 0;
-      // Rare finds are made in play, so a rebuilt map needs their value restored.
-      if (f.kind[n] === BLOCK.FIND) p.value[cell] *= RAVENS.findValue;
       if (f.kind[n] !== 0) p.remaining += 1;
     });
     s.ship.x = f.ship.x;

@@ -88,10 +88,15 @@ sweep; square-root Glory; weaker runes.
 treasure chest, the realm ending, and new ranks past Midgard's three. Gold, mead
 and gas placement also hasn't been tuned for the bigger regions by hand.
 
-**First bot pacing:** generation 1 stalls in region 5 at about 41 minutes,
-generation 2 in region 7 at about 30, and generation 3 in region 8 at about 19.
-That's about 90 minutes so far, which suits the 2-hour goal. The bot buys the
-cheapest upgrade, so a thoughtful player should beat it.
+**Latest bot pacing:** generation 1 stalls in region 5 at about 64 minutes,
+generation 2 in region 5 at about 37, and generation 3 in region 7 at about 35.
+That's about 2 hours 16 minutes without finishing Midgard, so it's running long.
+Tuning waits for real play, because the bot buys the cheapest upgrade, spends its
+first Glory on Old Foreman, and takes the first rune offered.
+
+**Open balance questions:** whether Forge Heat is now about right, whether Berserk
+feels good at x1.8 with a 3-minute refill, and whether passing the saga pays off
+strongly enough.
 
 What matters most: satisfying clearing, like popping bubble wrap. Numbers exist
 to serve that feeling.
@@ -124,6 +129,8 @@ to serve that feeling.
   that pops the remaining hexes in rings outward, with rising pitch, over a few
   seconds.
 - Clearing a whole region by hand earns a Clean Sweep bonus.
+- The Worldheart is sealed until 65% of the region is mined, and nothing can
+  touch it before then. A mark on the progress bar shows where it opens.
 - The Worldheart pays as it's mined: 0.5% of its value per 1% of its health, up
   to 49% just before it falls, with the rest paid at collapse.
 - Blocks never respawn, so each region's total value is predictable, apart from
@@ -163,6 +170,7 @@ Ranks:
 - Upgrades and ranks reset when the saga passes on, so the cap can't be outrun.
 - A level adds about 2%. Levels cost about 8% more each, and a rank-up step costs
   more again.
+- Berserk fills from mead, and slowly on its own over about 3 minutes.
 - A rank-up gives x2 or a unique perk, a new icon color, and a moment on screen.
 
 ### Ravens
@@ -170,15 +178,27 @@ Ranks:
 - Two only: Huginn and Muninn. They deal no damage.
 - The map starts under fog, apart from a small area around the ship. Ravens fly
   out, return, and reveal the hexes they passed through.
-- Recon is slow: a flight can take a minute or more, and it's meant to feel like
-  an expedition.
-- The ship only targets what it can see, so scouting finds gold, mead and the
-  Worldheart. Mining also reveals a small ring around the ship, so it can never
-  run out of targets while waiting for a raven.
-- Upgrades add range, width and flight rate.
-- Rare ore exists only if found: a raven's scouting can turn a hex into a rare
-  find, and that same hex mined undiscovered pays as a normal block. Prospecting
-  upgrades therefore raise real income.
+- They start with a reach of about 3 hexes. Recon is slow, and it's meant to feel
+  like an expedition.
+- Ravens grow slowly, because their abilities are strong at any stage. Most levels
+  are quiet, and every third level improves one trait in turn: speed, gem odds,
+  reach, then smarter scouting (how often a raven heads for uncharted hexes rather
+  than a random direction). Ranks add width, the second raven and gem value.
+- Idea for later realms: unfamiliar land. A new realm subtracts levels from the
+  ravens (Hel might take 50, two ranks), so they rebuild there. The penalty should
+  show on screen, with a reason, and fall as the clan learns the realm.
+- A trip finds at most one gem. Gems exist only if found: mined undiscovered, that
+  hex pays as plain rock. Gems pay x2, x5, x10, then x15 by raven rank.
+
+### Vision and targeting
+
+- The crew sees 4 hexes across open space, and a sight line stops at the first
+  solid hex. Stonesight, a later upgrade, could let sight lines pass through rock.
+- The ship finishes its current block before choosing another.
+- Priority: the player's tap, then the Worldheart once it's open and 10% of the
+  region is left, then the best visible block: damaged beats special beats normal,
+  nearby, with open sides breaking ties.
+- A tap holds until that block is gone.
 
 ### Haulers and cargo
 

@@ -15,6 +15,7 @@ export type GameEvent =
   | { t: 'rank'; id: UpgradeId; rank: number }
   | { t: 'reveal'; cell: number }
   | { t: 'find'; x: number; y: number }
+  | { t: 'unseal'; x: number; y: number }
   | { t: 'berserk' }
   | { t: 'waypoint'; x: number; y: number };
 
@@ -36,6 +37,7 @@ export interface Sweep {
   elapsed: number;
   tick: number;
   pay: number;
+  findValue: number;
   maxDist: number;
 }
 
@@ -46,7 +48,6 @@ export interface Ship {
   y: number;
   angle: number;
   target: number;
-  retarget: number;
   drillTimer: number;
   grindTimer: number;
   sweepTimer: number;
@@ -54,7 +55,7 @@ export interface Ship {
   thunderTimer: number;
   pulseTimer: number;
   drilling: boolean;
-  lampCell: number;
+  sightTimer: number;
   trail: Float32Array; // ring buffer of x,y pairs
   trailHead: number;
   sinceSample: number;
@@ -87,7 +88,7 @@ export interface GameState {
   berserkLeft: number;
   phase: 'mining' | 'collapse';
   phaseLeft: number;
-  waypoint: { x: number; y: number; left: number } | null;
+  waypoint: { x: number; y: number; cell: number } | null; // the player's tap, held until done
   rate: number; // smoothed silver per second
   rateWindow: number;
   rateTimer: number;
@@ -119,7 +120,6 @@ export function makeShip(): Ship {
     y: 0,
     angle: 0,
     target: -1,
-    retarget: 0,
     drillTimer: 0,
     grindTimer: 1,
     sweepTimer: 0,
@@ -127,7 +127,7 @@ export function makeShip(): Ship {
     thunderTimer: 2,
     pulseTimer: 2,
     drilling: false,
-    lampCell: -1,
+    sightTimer: 0,
     trail: new Float32Array(TRAIL_SAMPLES * 2),
     trailHead: 0,
     sinceSample: 0,
@@ -142,9 +142,8 @@ export function placeShip(w: Ship, p: Region, seed: number): void {
   w.y = Math.sin(a) * dist;
   w.angle = a + Math.PI;
   w.target = -1;
-  w.retarget = 0;
   w.drilling = false;
-  w.lampCell = -1;
+  w.sightTimer = 0;
   resetTrail(w);
 }
 

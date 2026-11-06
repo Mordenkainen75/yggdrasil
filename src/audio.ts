@@ -81,6 +81,11 @@ export class Sound {
     this.tone(pitch, pitch * 0.7, 0.1, 0.07, 'triangle');
   }
 
+  unseal(): void {
+    this.tone(140, 280, 0.6, 0.12, 'sawtooth');
+    this.tone(70, 140, 0.8, 0.14, 'sine');
+  }
+
   rank(): void {
     this.tone(330, 660, 0.25, 0.1, 'triangle');
     this.tone(495, 990, 0.35, 0.08, 'triangle');

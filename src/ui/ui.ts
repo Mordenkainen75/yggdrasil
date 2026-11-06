@@ -1,7 +1,7 @@
 import { LEVELS, MAX_LEVEL, PERKS, RUNES, SAGA, TOOL_SHAPES, UPGRADES, type PerkId, type RuneId, type UpgradeDef, type UpgradeId } from '../game/config.ts';
 import {
   buyPerk, buyUpgrade, chooseRune, computeStats, gloryPreview, isOpenChoice, isUnlocked, maxAffordable, openRuneOffer,
-  passSaga, perkCost, rankInfo, rankLevel, upgradeCost, upgradeDef, type Stats,
+  passSaga, perkCost, rankInfo, rankLevel, ravenNextStep, upgradeCost, upgradeDef, type Stats,
 } from '../game/economy.ts';
 import { triggerBerserk } from '../game/sim.ts';
 import { SAGA_READY, offlineCapSeconds, offlineShare, type GameState } from '../game/state.ts';
@@ -21,6 +21,13 @@ export interface UiHooks {
   hardReset(): void;
 }
 
+const RAVEN_NEXT = { reach: 'Farther reach', speed: 'Faster flight', find: 'Better gem odds', smart: 'Smarter scouting' };
+
+function ravenNext(level: number): string {
+  const next = ravenNextStep(level);
+  return `${RAVEN_NEXT[next.trait]} in ${next.inLevels} level${next.inLevels === 1 ? '' : 's'}`;
+}
+
 const DESCRIPTIONS: Record<UpgradeId, string> = {
   drill: 'Hits the hex in front of the ship',
   ravens: 'Scouts through the fog and finds rare ore',
@@ -37,7 +44,7 @@ function effect(id: UpgradeId, st: Stats): string {
   const every = (seconds: number) => `every ${seconds.toFixed(1)}s`;
   switch (id) {
     case 'drill': return `${fmt(st.drillDamage)} damage, ${st.drillRate.toFixed(1)} hits/s`;
-    case 'ravens': return `${st.ravenCount} scouting, ${Math.round(st.findChance * 100)}% find chance`;
+    case 'ravens': return `Reach ${Math.round(st.ravenRange / 10)}, ${Math.round(st.findChance * 100)}% gem per trip, x${st.findValue}`;
     case 'smelter': return `Silver x${fmt(st.silverMul)}`;
     case 'forge': return `Work rate x${(st.drillRate / 3).toFixed(2)}`;
     case 'haulers': return `${st.pods} pod${st.pods === 1 ? '' : 's'}, ${fmt(st.cutDamage)} cut ${every(st.cutEvery)}`;
@@ -99,7 +106,7 @@ export class Ui {
         <div><div class="silver" data-r="silver">0</div><div class="rate" data-r="rate"></div></div>
         <div class="world"><div class="world-name" data-r="world"></div><div class="world-sub" data-r="sub"></div></div>
       </div>
-      <div class="bar"><i data-r="bar"></i></div>
+      <div class="bar"><i data-r="bar"></i><b data-r="barMark"></b></div>
       <div class="hud-bottom">
         <div class="hud-left">
           <button class="chip" data-a="view">View</button>
@@ -356,7 +363,7 @@ export class Ui {
       ? (late ? `Arrives at ${needed(def.choice?.lateAt ?? [])}, stronger` : `Opens at ${needed(def.unlock ?? [])}`)
       : level === 0
         ? `${choosing ? 'Pick first: ' : ''}${DESCRIPTIONS[def.id]}`
-        : effect(def.id, st);
+        : `${effect(def.id, st)}${def.id === 'ravens' ? `. ${ravenNext(level)}` : ''}`;
     (row.querySelector('.rank-bar > i') as HTMLElement).style.width = `${(rankLevel(level) / LEVELS.perRank) * 100}%`;
     (row.querySelector('.row-price') as HTMLElement).innerHTML = !open ? '' : capped ? 'MAX'
       : `${fmt(upgradeCost(s, def.id, level, fits))}${this.mode !== 1 && count > 1 ? `<small>+${count} levels</small>` : ''}`;
@@ -372,6 +379,8 @@ export class Ui {
     r.world.textContent = p.name;
     r.sub.textContent = `Midgard, region ${s.regionIndex + 1}${s.glory > 0 ? `  |  ${fmt(s.glory)} glory` : ''}`;
     r.bar.style.width = `${(1 - p.remaining / p.total) * 100}%`;
+    r.barMark.style.left = `${(1 - computeStats(s).coreOpenAt) * 100}%`;
+    r.barMark.classList.toggle('open', p.coreOpen);
 
     const berserkOn = s.berserkLeft > 0;
     const ready = !berserkOn && s.berserkCharge >= 1;

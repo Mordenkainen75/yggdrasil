@@ -4,14 +4,36 @@
     {
       "name": "yggdrasil",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5273", "--strictPort"],
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5273",
+        "--strictPort"
+      ],
       "port": 5273
     },
     {
       "name": "yggdrasil-prod",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "preview", "--port", "5274", "--strictPort"],
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "5274",
+        "--strictPort"
+      ],
       "port": 5274
+    },
+    {
+      "name": "yggdrasil-test",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5275",
+        "--strictPort"
+      ],
+      "port": 5275
     }
   ]
 }

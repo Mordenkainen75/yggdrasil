@@ -23,14 +23,17 @@ export interface Stats {
   ravenRange: number;
   ravenSpeed: number;
   ravenWidth: number;
+  ravenSmart: number;
   findChance: number;
+  findValue: number;
   blastRings: number;
   blastMul: number;
   rockPayMul: number;
   goldPayMul: number;
   goldPull: number;
   corePayMul: number;
-  coreSeekAt: number;
+  coreOpenAt: number;
+  coreHuntAt: number;
   collapseValue: number;
   berserkSeconds: number;
   berserkPayMul: number;
@@ -62,6 +65,24 @@ export function baseline(s: GameState, def: UpgradeDef): number {
   return first && first !== def.id ? pair.lateBonus : 1;
 }
 
+/** How many times each raven trait has improved by this level. */
+function ravenSteps(level: number) {
+  const steps = { reach: 0, speed: 0, find: 0, smart: 0 };
+  const earned = Math.floor((level - 1) / RAVENS.levelsPerStep);
+  for (let n = 0; n < earned; n++) steps[RAVENS.levelCycle[n % RAVENS.levelCycle.length]] += 1;
+  return steps;
+}
+
+/** The next raven improvement, and how many levels away it is. */
+export function ravenNextStep(level: number) {
+  const at = Math.max(1, level);
+  const earned = Math.floor((at - 1) / RAVENS.levelsPerStep);
+  return {
+    trait: RAVENS.levelCycle[earned % RAVENS.levelCycle.length],
+    inLevels: RAVENS.levelsPerStep - ((at - 1) % RAVENS.levelsPerStep),
+  };
+}
+
 export function computeStats(s: GameState): Stats {
   const u = s.upgrades;
   const m = s.runes;
@@ -71,10 +92,11 @@ export function computeStats(s: GameState): Stats {
     const def = upgradeDef(id);
     return def.power * levelPower(u[id]) * baseline(s, def) * steel;
   };
-  const forge = u.forge > 0 ? Math.sqrt(levelPower(u.forge)) * baseline(s, upgradeDef('forge')) : 1;
+  const forge = u.forge > 0 ? levelPower(u.forge) ** LEVELS.forgePower * baseline(s, upgradeDef('forge')) : 1;
   const rate = forge * (berserk ? BERSERK.rateMul : 1);
   const smelter = u.smelter > 0 ? levelPower(u.smelter) * baseline(s, upgradeDef('smelter')) : 1;
   const berserkSeconds = BERSERK.seconds * 1.3 ** m.wunjo;
+  const raven = ravenSteps(u.ravens);
   return {
     drillDamage: tool('drill') * 0.9 ** m.kenaz * 0.85 ** m.thurisaz * 1.4 ** m.uruz,
     drillRate: SHIP.drillRate * rate * 0.9 ** m.ansuz,
@@ -93,17 +115,20 @@ export function computeStats(s: GameState): Stats {
     pulseEvery: upgradeDef('pulse').period / rate,
     silverMul: smelter * (1 + 0.3 * s.perks.hoard) * 1.2 ** m.jera,
     ravenCount: u.ravens <= 0 ? 0 : rankOf(u.ravens) >= 1 ? 2 : 1,
-    ravenRange: RAVENS.range * (1 + RAVENS.rangePerLevel * (u.ravens - 1)) * 1.3 ** m.ansuz,
-    ravenSpeed: RAVENS.speed * (1 + RAVENS.speedPerLevel * (u.ravens - 1)) * 1.2 ** m.ansuz,
+    ravenRange: (RAVENS.reachHexes + raven.reach) * 10 * 1.3 ** m.ansuz,
+    ravenSpeed: RAVENS.speed * RAVENS.speedStep ** raven.speed * 1.2 ** m.ansuz,
     ravenWidth: 1 + rankOf(u.ravens),
-    findChance: u.ravens <= 0 ? 0 : RAVENS.findChance + RAVENS.findChancePerLevel * (u.ravens - 1),
+    ravenSmart: Math.min(1, RAVENS.smart + RAVENS.smartStep * raven.smart),
+    findChance: u.ravens <= 0 ? 0 : RAVENS.findChance + RAVENS.findStep * raven.find,
+    findValue: RAVENS.findValues[Math.min(RAVENS.findValues.length - 1, rankOf(u.ravens))],
     blastRings: GAS.rings + m.kenaz,
     blastMul: 1.25 ** m.kenaz,
     rockPayMul: 0.8 ** m.fehu,
     goldPayMul: 1.6 ** m.fehu,
-    goldPull: m.fehu > 0 ? 110 : 25,
+    goldPull: m.fehu > 0 ? 130 : 80,
     corePayMul: 1.5 ** m.tiwaz,
-    coreSeekAt: m.tiwaz > 0 ? 0.8 : m.jera > 0 ? 0.12 : REGION.coreSeekAt,
+    coreOpenAt: m.tiwaz > 0 ? 0.8 : m.jera > 0 ? 0.12 : REGION.coreOpenAt,
+    coreHuntAt: m.tiwaz > 0 ? 0.8 : REGION.coreHuntAt,
     collapseValue: m.tiwaz > 0 ? 0 : REGION.collapseValue,
     berserkSeconds,
     berserkPayMul: berserk ? 1.4 ** m.wunjo : 1,

@@ -25,7 +25,8 @@ export const REGION = {
   coreHpShare: 0.1, // core hp, as a share of the whole region's hp
   coreValueShare: 0.3, // core value, as a share of the whole region's value
   corePaidAsMined: 0.5, // this share pays out as its health falls, the rest at collapse
-  coreSeekAt: 0.35, // ship heads for the core once this share of cells remains
+  coreOpenAt: 0.35, // the core stays sealed until only this share of cells remains
+  coreHuntAt: 0.1, // the ship goes for it on its own once this share remains
   collapseValue: 0.5, // leftover cells pay this share when the region dies
   collapseSeconds: 3.4,
 };
@@ -34,7 +35,10 @@ export const SHIP = {
   baseSpeed: 36,
   turnRate: 5.5, // radians per second
   lookAhead: 5,
-  lampRings: 3, // hexes revealed around the bow
+  sightHexes: 4, // how far the crew can see across open space
+  sightSolids: 1, // solid hexes a sight line can reach; a later upgrade could raise this
+  sightRays: 30,
+  sightEvery: 0.2, // seconds between looks around
   trailSampleDist: 2,
   samplesPerSegment: 3,
   drillRate: 3, // hits per second
@@ -45,24 +49,43 @@ export const SHIP = {
 
 export const BERSERK = {
   seconds: 8,
-  rateMul: 2.2,
-  speedMul: 1.5,
+  rateMul: 1.8,
+  speedMul: 1.3,
   chargePerMead: 0.34,
+  rechargeSeconds: 180, // fills on its own this slowly; mead is the fast way
+};
+
+// How much the ship wants a block, in distance units. Damaged beats special beats
+// normal, nearby. A far block can still lose to a near one, which keeps it from
+// crossing the map for every scratch. Hidden behind rock, a bonus counts for less.
+export const TARGETING = {
+  damaged: 140,
+  aheadWeight: 0.35,
+  gemMul: 1.4, // gems, as a multiple of gold
+  mead: 70,
+  gas: 55,
+  buriedShare: 0.4,
+  openSide: 2,
 };
 
 export const GAS = { rings: 3, hpShare: 0.3, drillShare: 3 };
 
-// Ravens never deal damage. Recon is slow on purpose.
+// Ravens never deal damage. Their abilities stay strong at any stage, so they grow
+// slowly: most levels are quiet, and every third one improves a single trait, in
+// the order below. Each rank raises what their gems are worth.
 export const RAVENS = {
-  speed: 14,
-  speedPerLevel: 0.015,
-  range: 130,
-  rangePerLevel: 0.02,
-  restSeconds: 6,
+  levelCycle: ['speed', 'find', 'reach', 'smart'] as const,
+  levelsPerStep: 3,
+  reachHexes: 3,
+  speed: 8,
+  speedStep: 1.12,
+  findChance: 0.2, // chance per trip of finding one gem
+  findStep: 0.025,
+  smart: 0.25, // chance of heading for uncharted hexes instead of a random direction
+  smartStep: 0.1,
+  restSeconds: 10,
   revealPerTick: 3,
-  findChance: 0.03,
-  findChancePerLevel: 0.003,
-  findValue: 12,
+  findValues: [2, 5, 10, 15],
 };
 
 export const TOOL_SHAPES = {
@@ -81,6 +104,7 @@ export const LEVELS = {
   rankPower: 2,
   costGrowth: 1.07,
   rankCostStep: 4,
+  forgePower: 0.35, // Forge Heat speeds up everything, so it takes only part of a level's power
 };
 
 // Each realm will add about three ranks of its own. These are Midgard's.
@@ -114,7 +138,7 @@ export const UPGRADES: UpgradeDef[] = [
   { id: 'drill', name: 'Drillhead', group: 'tool', baseCost: 5, power: 1, period: 1 / SHIP.drillRate, unlock: null },
   { id: 'ravens', name: 'Ravens', group: 'clan', baseCost: 15, power: 0, period: 0, unlock: null },
   { id: 'smelter', name: 'Smelter', group: 'clan', baseCost: 40, power: 0, period: 0, unlock: [['drill', 10]], choice: firstPair },
-  { id: 'forge', name: 'Forge Heat', group: 'clan', baseCost: 40, power: 0, period: 0, unlock: [['drill', 10]], choice: firstPair },
+  { id: 'forge', name: 'Forge Heat', group: 'clan', baseCost: 60, power: 0, period: 0, unlock: [['drill', 10]], choice: firstPair },
   { id: 'haulers', name: 'Clan Haulers', group: 'tool', baseCost: 100, power: 8, period: 1, unlock: [['smelter', 5], ['forge', 5]] },
   { id: 'sweep', name: 'Sweep Arms', group: 'tool', baseCost: 900, power: 24, period: 1, unlock: [['haulers', 10]], choice: secondPair },
   { id: 'lance', name: 'Gungnir Lance', group: 'tool', baseCost: 900, power: 60, period: 3, unlock: [['haulers', 10]], choice: secondPair },
@@ -166,15 +190,15 @@ export const RUNES: RuneDef[] = [
   { id: 'hagalaz', name: 'Hagalaz', meaning: 'hail', tag: 'Thunder', gain: 'Thunder fires 30% faster, with a wider blast', cost: 'Ship speed -10%', maxLevel: 3 },
   { id: 'ansuz', name: 'Ansuz', meaning: 'Odin', tag: 'Recon', gain: 'Ravens fly 30% farther and 20% faster', cost: 'Drill rate -10%', maxLevel: 3 },
   { id: 'fehu', name: 'Fehu', meaning: 'wealth', tag: 'Harvest', gain: 'Gold pays x1.6, and the ship hunts it hard', cost: 'Other blocks pay -20%', maxLevel: 3 },
-  { id: 'jera', name: 'Jera', meaning: 'harvest', tag: 'Harvest', gain: 'All blocks pay +20%', cost: 'The ship ignores the Worldheart until 12% of the region remains', maxLevel: 3 },
-  { id: 'tiwaz', name: 'Tiwaz', meaning: 'spear', tag: 'Drill', gain: 'Hunts the Worldheart early, and it pays x1.5', cost: 'Leftover blocks pay nothing', maxLevel: 3 },
+  { id: 'jera', name: 'Jera', meaning: 'harvest', tag: 'Harvest', gain: 'All blocks pay +20%', cost: 'The Worldheart stays sealed until 12% of the region remains', maxLevel: 3 },
+  { id: 'tiwaz', name: 'Tiwaz', meaning: 'spear', tag: 'Drill', gain: 'The Worldheart opens early and pays x1.5', cost: 'Leftover blocks pay nothing', maxLevel: 3 },
   { id: 'uruz', name: 'Uruz', meaning: 'strength', tag: 'Drill', gain: 'Drill damage x1.4', cost: 'Ship speed -15%', maxLevel: 3 },
   { id: 'wunjo', name: 'Wunjo', meaning: 'joy', tag: 'Berserk', gain: 'Berserk lasts 30% longer and pays x1.4', cost: null, maxLevel: 2 },
 ];
 
 export const SAGA = {
   unlockRegion: 4, // zero-based: must reach the 5th region
-  gloryBase: 20000, // glory is the square root of silver earned, over this
+  gloryBase: 5000, // glory is the square root of silver earned, over this
 };
 
 export const OFFLINE = {

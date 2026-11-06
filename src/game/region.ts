@@ -22,6 +22,7 @@ export interface Region {
   total: number;
   remaining: number;
   core: number; // grid index
+  coreOpen: boolean; // sealed until enough of the region is mined
 }
 
 const NAME_A = ['Skarn', 'Jarn', 'Grim', 'Ulf', 'Hrafn', 'Stein', 'Kol', 'Myrk', 'Thorn', 'Bjorn', 'Vig', 'Eld', 'Frost', 'Sig'];
@@ -80,6 +81,7 @@ export function makeRegion(index: number, seed: number): Region {
     total: 0,
     remaining: 0,
     core: 0,
+    coreOpen: false,
   };
 
   // Lumpy outline: a disc pushed in and out by a few slow waves.

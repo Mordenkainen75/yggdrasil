@@ -1,6 +1,6 @@
 // The rules of the game. Nothing here touches the screen, so the same code
 // runs in the browser and in the headless balance simulator.
-import { BLOCK, GAS, RAVENS, REGION, SHIP, TOOL_SHAPES } from './config.ts';
+import { BERSERK, BLOCK, GAS, RAVENS, REGION, SHIP, TARGETING, TOOL_SHAPES } from './config.ts';
 import { autoBuy, computeStats, type Stats } from './economy.ts';
 import { cellAt, forEachInRange, makeRegion, neighbourOf, regionSeed } from './region.ts';
 import { placeShip, pushTrail, segmentPos, type GameState, type Raven } from './state.ts';
@@ -26,12 +26,12 @@ function startCollapse(s: GameState, st: Stats): void {
   for (const i of p.cells) {
     if (p.kind[i] !== BLOCK.EMPTY) {
       order.push(i);
-      leftover += p.value[i];
+      leftover += p.value[i] * (p.kind[i] === BLOCK.FIND ? st.findValue : 1);
     }
   }
   order.sort((a, b) => dist(a) - dist(b));
   const pay = st.collapseValue * st.silverMul;
-  s.sweep = { order, next: 0, elapsed: 0, tick: 0, pay, maxDist: order.length ? dist(order[order.length - 1]) : 1 };
+  s.sweep = { order, next: 0, elapsed: 0, tick: 0, pay, findValue: st.findValue, maxDist: order.length ? dist(order[order.length - 1]) : 1 };
   s.events.push({ t: 'core', x: cx, y: cy, bonus: leftover * pay });
   s.phase = 'collapse';
   s.phaseLeft = REGION.collapseSeconds;
@@ -53,7 +53,7 @@ function updateSweep(s: GameState, dt: number): void {
     const i = sw.order[sw.next];
     if (Math.hypot(p.wx[i] - cx, p.wy[i] - cy) > reach) break;
     sw.next += 1;
-    earn(s, p.value[i] * sw.pay);
+    earn(s, p.value[i] * sw.pay * (p.kind[i] === BLOCK.FIND ? sw.findValue : 1));
     s.events.push({ t: 'mine', x: p.wx[i], y: p.wy[i], kind: 0, value: 0, hue: p.hue });
     p.kind[i] = BLOCK.EMPTY;
     p.remaining -= 1;
@@ -70,8 +70,12 @@ function killCell(s: GameState, st: Stats, i: number): void {
   const kind = p.kind[i];
   if (kind === BLOCK.EMPTY) return;
   p.kind[i] = BLOCK.EMPTY;
+  p.seen[i] = 1;
   p.remaining -= 1;
-  const kindPay = kind === BLOCK.GOLD ? st.goldPayMul : kind === BLOCK.CORE ? st.corePayMul : st.rockPayMul;
+  const kindPay = kind === BLOCK.GOLD ? st.goldPayMul
+    : kind === BLOCK.CORE ? st.corePayMul
+      : kind === BLOCK.FIND ? st.rockPayMul * st.findValue
+        : st.rockPayMul;
   // The Worldheart paid part of its value on the way down, so only the rest is left.
   const share = kind === BLOCK.CORE ? 1 - REGION.corePaidAsMined : 1;
   const value = p.value[i] * share * st.silverMul * kindPay * st.berserkPayMul;
@@ -96,6 +100,7 @@ function damageCell(s: GameState, st: Stats, i: number, amount: number, drill = 
   const p = s.region;
   if (p.kind[i] === BLOCK.EMPTY) return;
   if (p.kind[i] === BLOCK.CORE) {
+    if (!p.coreOpen) return; // sealed: nothing can touch it yet
     const before = Math.max(0, p.hp[i] / p.maxHp[i]);
     const after = Math.max(0, (p.hp[i] - amount) / p.maxHp[i]);
     earn(s, p.value[i] * REGION.corePaidAsMined * (before - after) * st.silverMul * st.corePayMul * st.berserkPayMul);
@@ -120,35 +125,63 @@ function runBlasts(s: GameState, st: Stats): void {
   }
 }
 
+/**
+ * How much the ship wants a block; lower wins. Nearby, damaged beats special beats
+ * normal, and open sides break the ties, so it finishes what it started and clears
+ * a face instead of boring tunnels.
+ */
+function scoreCell(s: GameState, st: Stats, i: number, cos: number, sin: number): number {
+  const p = s.region;
+  const w = s.ship;
+  const kind = p.kind[i];
+  const dx = p.wx[i] - w.x;
+  const dy = p.wy[i] - w.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const ahead = (dx * cos + dy * sin) / (dist + 1);
+  let open = 0;
+  for (let dir = 0; dir < 6; dir++) {
+    const n = neighbourOf(p, i, dir);
+    if (n < 0 || p.kind[n] === BLOCK.EMPTY) open += 1;
+  }
+  let bonus = 0;
+  if (p.hp[i] < p.maxHp[i]) bonus = TARGETING.damaged;
+  else if (kind === BLOCK.FIND) bonus = st.goldPull * TARGETING.gemMul;
+  else if (kind === BLOCK.GOLD) bonus = st.goldPull;
+  else if (kind === BLOCK.MEAD) bonus = TARGETING.mead;
+  else if (kind === BLOCK.GAS) bonus = TARGETING.gas;
+  if (open === 0) bonus *= TARGETING.buriedShare;
+  return dist * (1.4 - TARGETING.aheadWeight * ahead) - bonus - open * TARGETING.openSide;
+}
+
+/**
+ * Chooses the next block, only once the last one is gone. Priority: the player's
+ * tap, then the Worldheart once it's open and the region is nearly done, then the
+ * best block the crew can see.
+ */
 function pickTarget(s: GameState, st: Stats): void {
   const p = s.region;
   const w = s.ship;
-  const fromX = s.waypoint ? s.waypoint.x : w.x;
-  const fromY = s.waypoint ? s.waypoint.y : w.y;
+  if (s.waypoint) {
+    if (p.kind[s.waypoint.cell] !== BLOCK.EMPTY) {
+      w.target = s.waypoint.cell;
+      return;
+    }
+    s.waypoint = null;
+  }
+  const coreLive = p.coreOpen && p.kind[p.core] === BLOCK.CORE;
+  if (coreLive && p.remaining <= p.total * st.coreHuntAt) {
+    w.target = p.core;
+    return;
+  }
   const cos = Math.cos(w.angle);
   const sin = Math.sin(w.angle);
-  const coreDue = p.remaining <= p.total * st.coreSeekAt;
-  const coreOpen = coreDue || (s.waypoint !== null && p.seen[p.core] === 1);
-  const wander = Math.floor(s.time / 2);
-
   const scan = (seenOnly: boolean): number => {
     let best = -1;
     let bestScore = Infinity;
     for (const i of p.cells) {
       const kind = p.kind[i];
-      if (kind === BLOCK.EMPTY || (kind === BLOCK.CORE && !coreOpen)) continue;
-      if (seenOnly && p.seen[i] === 0 && kind !== BLOCK.CORE) continue;
-      const dx = p.wx[i] - fromX;
-      const dy = p.wy[i] - fromY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      // Prefer what lies ahead so the ship sweeps through instead of jittering.
-      const ahead = s.waypoint ? 0 : (dx * cos + dy * sin) / (dist + 1);
-      let score = dist * (1.4 - 0.6 * ahead);
-      if (kind === BLOCK.GOLD) score -= st.goldPull;
-      else if (kind === BLOCK.FIND) score -= st.goldPull * 1.5;
-      else if (kind === BLOCK.MEAD) score -= 18;
-      else if (kind === BLOCK.CORE && !s.waypoint) score -= 100000;
-      score += (Math.imul(i + wander, 2654435761) >>> 24) * 0.06;
+      if (kind === BLOCK.EMPTY || kind === BLOCK.CORE || (seenOnly && p.seen[i] === 0)) continue;
+      const score = scoreCell(s, st, i, cos, sin);
       if (score < bestScore) {
         bestScore = score;
         best = i;
@@ -156,23 +189,33 @@ function pickTarget(s: GameState, st: Stats): void {
     }
     return best;
   };
-
-  // The ship works what it can see. A tap can send it into the fog on purpose.
-  let best = scan(s.waypoint === null);
-  if (best === -1) best = scan(false);
-  // Only the core left, and the gate above did not open: go for it anyway.
-  w.target = best === -1 && p.kind[p.core] === BLOCK.CORE ? p.core : best;
+  w.target = scan(true);
+  if (w.target === -1) w.target = scan(false);
+  if (w.target === -1 && coreLive) w.target = p.core;
 }
 
-function updateLamp(s: GameState): void {
+/** Sight lines from the ship: they cross open space and stop at the first solid hex. */
+function updateSight(s: GameState, dt: number): void {
   const w = s.ship;
+  w.sightTimer -= dt;
+  if (w.sightTimer > 0) return;
+  w.sightTimer = SHIP.sightEvery;
   const p = s.region;
-  const at = cellAt(p, w.x + Math.cos(w.angle) * SHIP.lookAhead, w.y + Math.sin(w.angle) * SHIP.lookAhead);
-  if (at < 0 || at === w.lampCell) return;
-  w.lampCell = at;
-  forEachInRange(p, at, SHIP.lampRings, (cell) => {
-    p.seen[cell] = 1;
-  });
+  const reach = SHIP.sightHexes * 10;
+  for (let ray = 0; ray < SHIP.sightRays; ray++) {
+    const a = (ray / SHIP.sightRays) * Math.PI * 2;
+    const cos = Math.cos(a);
+    const sin = Math.sin(a);
+    let solids = 0;
+    let last = -1;
+    for (let d = 5; d <= reach && solids < SHIP.sightSolids; d += 4) {
+      const cell = cellAt(p, w.x + cos * d, w.y + sin * d);
+      if (cell < 0 || cell === last) continue;
+      last = cell;
+      p.seen[cell] = 1;
+      if (p.kind[cell] !== BLOCK.EMPTY) solids += 1;
+    }
+  }
 }
 
 function updateShip(s: GameState, st: Stats, dt: number): void {
@@ -186,11 +229,7 @@ function updateShip(s: GameState, st: Stats, dt: number): void {
     tx = w.x + Math.cos(w.angle + 0.6) * 100;
     ty = w.y + Math.sin(w.angle + 0.6) * 100;
   } else {
-    w.retarget -= dt;
-    if (w.retarget <= 0 || w.target < 0 || p.kind[w.target] === BLOCK.EMPTY) {
-      pickTarget(s, st);
-      w.retarget = 0.35;
-    }
+    if (w.target < 0 || p.kind[w.target] === BLOCK.EMPTY) pickTarget(s, st);
     if (w.target < 0) return;
     tx = p.wx[w.target];
     ty = p.wy[w.target];
@@ -202,10 +241,11 @@ function updateShip(s: GameState, st: Stats, dt: number): void {
   w.angle += Math.max(-turn, Math.min(turn, delta));
   const cos = Math.cos(w.angle);
   const sin = Math.sin(w.angle);
-  if (s.phase === 'mining') updateLamp(s);
 
   const front = s.phase === 'mining' ? cellAt(p, w.x + cos * SHIP.lookAhead, w.y + sin * SHIP.lookAhead) : -1;
-  if (front >= 0 && p.kind[front] !== BLOCK.EMPTY) {
+  // The Worldheart only stops the ship when it's the target; otherwise it passes over.
+  const passable = front < 0 || p.kind[front] === BLOCK.EMPTY || (p.kind[front] === BLOCK.CORE && front !== w.target);
+  if (!passable) {
     w.drilling = true;
     w.drillTimer -= dt;
     while (w.drillTimer <= 0 && s.phase === 'mining') {
@@ -217,6 +257,8 @@ function updateShip(s: GameState, st: Stats, dt: number): void {
 
   w.drilling = false;
   w.drillTimer = Math.min(w.drillTimer, 1 / st.drillRate);
+  // Turn on the spot for a close target, or the ship can circle it forever.
+  if (s.phase === 'mining' && Math.abs(delta) > 0.7 && Math.hypot(tx - w.x, ty - w.y) < 18) return;
   const move = st.speed * dt;
   w.x += cos * move;
   w.y += sin * move;
@@ -321,30 +363,49 @@ function updatePulse(s: GameState, st: Stats, dt: number): void {
   });
 }
 
-function launchRaven(s: GameState, st: Stats, r: Raven): void {
+/** Uncharted hexes along a straight flight from the ship. */
+function unchartedAlong(s: GameState, angle: number, reach: number): number {
   const p = s.region;
   const w = s.ship;
-  let best = -1;
-  let bestDist = 0;
-  // A few random picks is plenty: this only needs a direction worth scouting.
-  for (let tries = 0; tries < 40; tries++) {
-    const i = p.cells[Math.floor(Math.random() * p.cells.length)];
-    if (p.seen[i] === 1) continue;
-    const d = Math.hypot(p.wx[i] - w.x, p.wy[i] - w.y);
-    if (d <= st.ravenRange && d > bestDist) {
-      bestDist = d;
-      best = i;
+  let count = 0;
+  for (let d = 10; d <= reach; d += 10) {
+    const cell = cellAt(p, w.x + Math.cos(angle) * d, w.y + Math.sin(angle) * d);
+    if (cell >= 0 && p.seen[cell] === 0 && p.kind[cell] !== BLOCK.EMPTY) count += 1;
+  }
+  return count;
+}
+
+function launchRaven(s: GameState, st: Stats, r: Raven): void {
+  const w = s.ship;
+  let angle = Math.random() * Math.PI * 2;
+  // A smarter raven compares a few headings and takes the most uncharted one.
+  if (Math.random() < st.ravenSmart) {
+    let most = -1;
+    for (let tries = 0; tries < 12; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const count = unchartedAlong(s, a, st.ravenRange);
+      if (count > most) {
+        most = count;
+        angle = a;
+      }
     }
   }
-  if (best < 0) {
-    r.wait = 3;
-    return;
-  }
-  r.tx = p.wx[best];
-  r.ty = p.wy[best];
+  r.tx = w.x + Math.cos(angle) * st.ravenRange;
+  r.ty = w.y + Math.sin(angle) * st.ravenRange;
   r.state = 'out';
   r.path.clear();
   r.lastCell = -1;
+}
+
+/** A trip finds at most one gem. Rare ore exists only if a raven finds it. */
+function reportTrip(s: GameState, st: Stats, r: Raven): void {
+  const p = s.region;
+  const cells = [...r.path];
+  r.path.clear();
+  s.reveal.push(...cells);
+  if (Math.random() >= st.findChance) return;
+  const rock = cells.filter((cell) => p.kind[cell] === BLOCK.ROCK);
+  if (rock.length > 0) p.kind[rock[Math.floor(Math.random() * rock.length)]] = BLOCK.FIND;
 }
 
 function updateRavens(s: GameState, st: Stats, dt: number): void {
@@ -371,7 +432,7 @@ function updateRavens(s: GameState, st: Stats, dt: number): void {
         r.state = 'back';
       } else {
         // Home with the report: what it saw appears now, nearest first.
-        if (s.phase === 'mining') s.reveal.push(...r.path);
+        if (s.phase === 'mining') reportTrip(s, st, r);
         r.path.clear();
         r.state = 'rest';
         r.wait = RAVENS.restSeconds;
@@ -392,20 +453,23 @@ function updateRavens(s: GameState, st: Stats, dt: number): void {
   }
 }
 
-/** Reveals reported hexes a few at a time. Rare ore exists only if a raven finds it. */
-function updateReveal(s: GameState, st: Stats): void {
+/** Reveals reported hexes a few at a time, nearest first. */
+function updateReveal(s: GameState): void {
   const p = s.region;
   for (let n = 0; n < RAVENS.revealPerTick && s.reveal.length > 0; n++) {
     const cell = s.reveal.shift() as number;
     if (p.seen[cell] === 1) continue;
     p.seen[cell] = 1;
     s.events.push({ t: 'reveal', cell });
-    if (p.kind[cell] === BLOCK.ROCK && Math.random() < st.findChance) {
-      p.kind[cell] = BLOCK.FIND;
-      p.value[cell] *= RAVENS.findValue;
-      s.events.push({ t: 'find', x: p.wx[cell], y: p.wy[cell] });
-    }
+    if (p.kind[cell] === BLOCK.FIND) s.events.push({ t: 'find', x: p.wx[cell], y: p.wy[cell] });
   }
+}
+
+function updateSeal(s: GameState, st: Stats): void {
+  const p = s.region;
+  if (p.coreOpen || p.remaining > p.total * st.coreOpenAt) return;
+  p.coreOpen = true;
+  s.events.push({ t: 'unseal', x: p.wx[p.core], y: p.wy[p.core] });
 }
 
 function nextRegion(s: GameState): void {
@@ -415,6 +479,7 @@ function nextRegion(s: GameState): void {
   s.region = makeRegion(s.regionIndex, regionSeed(s.seed, s.regionIndex));
   placeShip(s.ship, s.region, s.seed + s.regionIndex);
   s.sweep = null;
+  s.waypoint = null;
   s.phase = 'mining';
   s.events.push({ t: 'region', name: s.region.name, index: s.regionIndex });
 }
@@ -427,10 +492,27 @@ export function triggerBerserk(s: GameState): boolean {
   return true;
 }
 
+/** A tap holds until that block is gone. Open space means the nearest block to the tap. */
 export function setWaypoint(s: GameState, x: number, y: number): void {
-  s.waypoint = { x, y, left: 4 };
-  s.ship.retarget = 0;
-  s.events.push({ t: 'waypoint', x, y });
+  const p = s.region;
+  const usable = (i: number) => p.kind[i] !== BLOCK.EMPTY && (p.kind[i] !== BLOCK.CORE || p.coreOpen);
+  let cell = cellAt(p, x, y);
+  if (cell < 0 || !usable(cell)) {
+    cell = -1;
+    let nearest = Infinity;
+    for (const i of p.cells) {
+      if (!usable(i)) continue;
+      const d = Math.hypot(p.wx[i] - x, p.wy[i] - y);
+      if (d < nearest) {
+        nearest = d;
+        cell = i;
+      }
+    }
+  }
+  if (cell < 0) return;
+  s.waypoint = { x: p.wx[cell], y: p.wy[cell], cell };
+  s.ship.target = cell;
+  s.events.push({ t: 'waypoint', x: p.wx[cell], y: p.wy[cell] });
 }
 
 export function step(s: GameState, dt: number): void {
@@ -438,9 +520,11 @@ export function step(s: GameState, dt: number): void {
   const st = computeStats(s);
 
   if (s.berserkLeft > 0) s.berserkLeft = Math.max(0, s.berserkLeft - dt);
-  if (s.waypoint) {
-    s.waypoint.left -= dt;
-    if (s.waypoint.left <= 0) s.waypoint = null;
+  else if (s.berserkCharge < 1) s.berserkCharge = Math.min(1, s.berserkCharge + dt / BERSERK.rechargeSeconds);
+  if (s.waypoint && s.region.kind[s.waypoint.cell] === BLOCK.EMPTY) s.waypoint = null;
+  if (s.phase === 'mining') {
+    updateSeal(s, st);
+    updateSight(s, dt);
   }
 
   updateShip(s, st, dt);
@@ -451,7 +535,7 @@ export function step(s: GameState, dt: number): void {
     updateThunder(s, st, dt);
     updatePulse(s, st, dt);
     runBlasts(s, st);
-    updateReveal(s, st);
+    updateReveal(s);
   }
   updateRavens(s, st, dt);
 

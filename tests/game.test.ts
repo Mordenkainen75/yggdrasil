@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BLOCK, LEVELS, MAX_LEVEL, RAVENS, REGION, SAGA, TICK, UPGRADES } from '../src/game/config.ts';
+import { BLOCK, LEVELS, MAX_LEVEL, REGION, SAGA, SHIP, TICK, UPGRADES } from '../src/game/config.ts';
 import {
   applyOffline, buyUpgrade, chooseRune, computeStats, gloryPreview, isOpenChoice, isUnlocked, levelPower, maxAffordable,
   openRuneOffer, passSaga, rankLevel, rankOf, upgradeCost, upgradeDef,
@@ -8,7 +8,7 @@ import {
 import { hexToWorldX, hexToWorldY, worldToHex } from '../src/game/hex.ts';
 import { cellAt, forEachInRange, makeRegion } from '../src/game/region.ts';
 import { deserialize, serialize } from '../src/game/save.ts';
-import { step, triggerBerserk } from '../src/game/sim.ts';
+import { setWaypoint, step, triggerBerserk } from '../src/game/sim.ts';
 import { newGame, type GameState } from '../src/game/state.ts';
 
 function run(s: GameState, seconds: number): void {
@@ -138,7 +138,7 @@ test('a ship left alone keeps earning, and never touches what it cannot see', ()
   }
 });
 
-test('the fog starts closed and the lamp opens a little of it', () => {
+test('the fog starts closed and the crew sees only a little of it', () => {
   const s = newGame(9);
   assert.equal(s.region.seen.reduce((a, b) => a + b, 0), 0);
   run(s, 60);
@@ -147,50 +147,205 @@ test('the fog starts closed and the lamp opens a little of it', () => {
   assert.equal(s.region.seen[s.region.core], 0, 'the Worldheart is still hidden');
 });
 
+test('sight crosses open space and stops at the first solid hex', () => {
+  const s = newGame(21);
+  const p = s.region;
+  // A single hollow chamber around the middle, 2 hexes wide, walled by solid rock.
+  const cx = p.wx[p.core] + 60;
+  for (const i of p.cells) {
+    if (Math.hypot(p.wx[i] - cx, p.wy[i]) < 22) p.kind[i] = BLOCK.EMPTY;
+  }
+  s.ship.x = cx;
+  s.ship.y = 0;
+  s.ship.target = -1;
+  step(s, TICK);
+  let deep = 0;
+  let wall = 0;
+  for (const i of p.cells) {
+    const d = Math.hypot(p.wx[i] - cx, p.wy[i]);
+    if (p.kind[i] === BLOCK.EMPTY) continue;
+    if (p.seen[i] === 1 && d < 36) wall += 1;
+    if (p.seen[i] === 1 && d > 42) deep += 1;
+  }
+  assert.ok(wall > 0, 'the chamber wall is visible');
+  assert.equal(deep, 0, 'nothing behind that wall is');
+  assert.equal(SHIP.sightSolids, 1);
+});
+
+test('the ship keeps its target until the block is gone', () => {
+  const s = newGame(22);
+  s.ship.x = 0;
+  s.ship.y = -60;
+  run(s, 1);
+  const target = s.ship.target;
+  assert.ok(target >= 0);
+  for (let i = 0; i < 30 * 2 && s.region.kind[target] !== BLOCK.EMPTY; i++) {
+    step(s, TICK);
+    s.events.length = 0;
+    if (s.region.kind[target] !== BLOCK.EMPTY) assert.equal(s.ship.target, target);
+  }
+});
+
+test('a tap holds through other blocks until its block is gone', () => {
+  const s = newGame(23);
+  const p = s.region;
+  s.upgrades.drill = 60;
+  s.ship.x = 0;
+  s.ship.y = -60;
+  const tap = cellAt(p, 40, -60);
+  assert.notEqual(p.kind[tap], BLOCK.EMPTY);
+  setWaypoint(s, p.wx[tap], p.wy[tap]);
+  let guard = 0;
+  while (p.kind[tap] !== BLOCK.EMPTY && guard++ < 30 * 120) {
+    assert.equal(s.ship.target, tap, 'still heading for the tapped block');
+    step(s, TICK);
+    s.events.length = 0;
+  }
+  assert.equal(p.kind[tap], BLOCK.EMPTY);
+  step(s, TICK);
+  assert.equal(s.waypoint, null, 'the tap ends when its block is gone');
+});
+
+test('the Worldheart is sealed until enough of the region is mined', () => {
+  const s = newGame(24);
+  const p = s.region;
+  p.seen.fill(1);
+  const full = p.hp[p.core];
+  s.ship.x = p.wx[p.core] - 8;
+  s.ship.y = p.wy[p.core];
+  s.ship.angle = 0;
+  s.upgrades.drill = 60;
+  run(s, 3);
+  assert.equal(p.coreOpen, false);
+  assert.equal(p.hp[p.core], full, 'nothing can touch it');
+  p.remaining = Math.floor(p.total * 0.3);
+  run(s, 1);
+  assert.equal(p.coreOpen, true);
+  assert.notEqual(s.ship.target, p.core, 'open, but the ship leaves it for later');
+  setWaypoint(s, p.wx[p.core], p.wy[p.core]);
+  assert.equal(s.ship.target, p.core, 'a tap can go for it as soon as it opens');
+  s.waypoint = null;
+  p.remaining = Math.floor(p.total * 0.08);
+  s.ship.target = -1;
+  step(s, TICK);
+  assert.equal(s.ship.target, p.core, 'with 10% left the ship goes on its own');
+});
+
 test('ravens deal no damage, and their report reveals hexes when they get home', () => {
   const s = newGame(10);
   s.upgrades.ravens = 1;
+  s.upgrades.drill = 0;
   const seenAt = () => s.region.seen.reduce((a, b) => a + b, 0);
-  const noDrill = () => {
-    s.upgrades.drill = 0;
-    s.ship.x = 9999;
-    s.ship.y = 9999;
-  };
-  noDrill();
   s.ship.x = 0;
   s.ship.y = 0;
   const total = s.region.remaining;
+  let flew = false;
   let reported = false;
   for (let i = 0; i < 30 * 240 && !reported; i++) {
     const before = seenAt();
-    s.ship.target = -1;
-    s.ship.retarget = 99;
     step(s, TICK);
     s.events.length = 0;
-    reported = seenAt() > before;
+    flew ||= s.ravens[0]?.state === 'back';
+    reported = flew && s.ravens[0]?.state === 'rest' && seenAt() > before;
   }
-  assert.ok(reported, 'a raven came home and reported');
+  assert.ok(flew && reported, 'a raven came home and reported');
   assert.equal(s.region.remaining, total, 'no hex was damaged');
 });
 
-test('rare ore exists only if a raven finds it', () => {
-  const p = makeRegion(0, 3);
-  assert.equal(p.kind.filter((k) => k === BLOCK.FIND).length, 0, 'none are generated');
+test('ravens improve every third level, one trait at a time, and ranks raise gem value', () => {
+  const s = newGame(25);
+  const at = (level: number) => {
+    s.upgrades.ravens = level;
+    return computeStats(s);
+  };
+  const start = at(1);
+  assert.equal(Math.round(start.ravenRange / 10), 3);
+  assert.equal(start.findValue, 2);
+  assert.deepEqual(at(3), start, 'levels 2 and 3 are quiet');
+  assert.ok(at(4).ravenSpeed > start.ravenSpeed);
+  assert.equal(at(4).ravenRange, start.ravenRange);
+  assert.ok(at(7).findChance > start.findChance);
+  assert.equal(Math.round(at(10).ravenRange / 10), 4, 'reach comes third');
+  assert.ok(at(13).ravenSmart > start.ravenSmart);
+  assert.equal(Math.round(at(75).ravenRange / 10), 9, 'reach stays modest through Midgard');
+  assert.equal(at(26).findValue, 5);
+  assert.equal(at(26).ravenCount, 2);
+  assert.equal(at(51).findValue, 10);
+});
+
+test('the ship prefers damaged blocks, then special ones, then normal ones', () => {
+  const s = newGame(27);
+  const p = s.region;
+  p.seen.fill(1);
+  s.ship.x = 0;
+  s.ship.y = 0;
+  s.ship.angle = 0;
+  const cleared = [...p.cells].filter((i) => Math.hypot(p.wx[i], p.wy[i]) < 30);
+  for (const i of cleared) {
+    if (i !== p.core) p.kind[i] = BLOCK.EMPTY;
+  }
+  const ring = [...p.cells].filter((i) => p.kind[i] === BLOCK.ROCK && Math.hypot(p.wx[i], p.wy[i]) < 36);
+  const damaged = ring[3];
+  const gold = ring[Math.floor(ring.length / 2)];
+  p.kind[gold] = BLOCK.GOLD;
+  step(s, TICK);
+  assert.equal(s.ship.target, gold, 'special beats normal');
+  p.hp[damaged] = p.maxHp[damaged] * 0.5;
+  s.ship.target = -1;
+  step(s, TICK);
+  assert.equal(s.ship.target, damaged, 'damaged beats special');
+});
+
+test('berserk refills on its own, slowly, and mead speeds it up', () => {
+  const s = newGame(28);
+  s.berserkCharge = 0;
+  run(s, 18);
+  assert.ok(Math.abs(s.berserkCharge - 0.1) < 0.02, `${s.berserkCharge}`);
+});
+
+test('a raven trip finds at most one gem, and gems exist only if found', () => {
+  assert.equal(makeRegion(0, 3).kind.filter((k) => k === BLOCK.FIND).length, 0, 'none are generated');
   const s = newGame(11);
+  const p = s.region;
   s.upgrades.ravens = 1;
-  const cell = s.region.cells.find((i) => s.region.kind[i] === BLOCK.ROCK) as number;
-  const base = s.region.value[cell];
+  const rock = [...p.cells].filter((i) => p.kind[i] === BLOCK.ROCK).slice(0, 30);
+  s.ravens.push({ x: s.ship.x, y: s.ship.y, state: 'back', wait: 0, tx: 0, ty: 0, path: new Set(rock), lastCell: -1 });
   const chance = Math.random;
   Math.random = () => 0;
-  s.reveal.push(cell);
   step(s, TICK);
   Math.random = chance;
-  assert.equal(s.region.kind[cell], BLOCK.FIND);
-  assert.equal(s.region.value[cell], base * RAVENS.findValue);
+  const gems = rock.filter((i) => p.kind[i] === BLOCK.FIND);
+  assert.equal(gems.length, 1);
   const loaded = deserialize(serialize(s, 1000));
   assert.ok(loaded);
-  assert.equal(loaded.region.kind[cell], BLOCK.FIND);
-  assert.equal(loaded.region.value[cell], base * RAVENS.findValue, 'a find keeps its value through a reload');
+  assert.equal(loaded.region.kind[gems[0]], BLOCK.FIND);
+});
+
+test('a gem pays by the ravens rank, and the same hex unfound pays as rock', () => {
+  const s = newGame(26);
+  const p = s.region;
+  const cell = p.cells.find((i) => p.kind[i] === BLOCK.ROCK) as number;
+  const other = p.cells.find((i) => p.kind[i] === BLOCK.ROCK && p.value[i] === p.value[cell] && i !== cell) as number;
+  s.upgrades.ravens = 26;
+  p.kind[cell] = BLOCK.FIND;
+  p.hp[cell] = 0.001;
+  p.hp[other] = 0.001;
+  s.ship.x = p.wx[other] - 8;
+  s.ship.y = p.wy[other];
+  s.ship.angle = 0;
+  s.ship.target = other;
+  const before = s.silver;
+  let guard = 0;
+  while (p.kind[other] !== BLOCK.EMPTY && guard++ < 30) step(s, TICK);
+  const plain = s.silver - before;
+  s.ship.x = p.wx[cell] - 8;
+  s.ship.y = p.wy[cell];
+  s.ship.angle = 0;
+  s.ship.target = cell;
+  const mid = s.silver;
+  guard = 0;
+  while (p.kind[cell] !== BLOCK.EMPTY && guard++ < 30) step(s, TICK);
+  assert.ok(Math.abs(s.silver - mid - plain * 5) < 1e-6);
 });
 
 test('the Worldheart pays half as it falls and the rest when it dies', () => {
@@ -224,6 +379,8 @@ test('the collapse pops what is left in rings, pays it, then moves on', () => {
   const p = s.region;
   p.seen.fill(1);
   p.hp[p.core] = 0.001;
+  p.coreOpen = true;
+  setWaypoint(s, p.wx[p.core], p.wy[p.core]);
   s.ship.x = p.wx[p.core] - 8;
   s.ship.y = p.wy[p.core];
   s.ship.angle = 0;

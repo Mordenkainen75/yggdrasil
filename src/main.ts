@@ -46,6 +46,8 @@ renderer.onEvent = (e) => {
     if (e.drill) sound.tick();
   } else if (e.t === 'wave') {
     sound.wave(e.progress);
+  } else if (e.t === 'unseal') {
+    sound.unseal();
   } else if (e.t === 'rank') {
     sound.rank();
     navigator.vibrate?.(30);
