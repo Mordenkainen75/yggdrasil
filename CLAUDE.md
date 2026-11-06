@@ -44,5 +44,6 @@ is a hard requirement for every feature.
   pacing targets in `docs/DESIGN.md`.
 - New saved fields must have defaults in `deserialize`, so old saves keep working.
 - In dev builds `window.game()` returns live state for automated playtests.
-- Blocks, the ship and effects are line art. Don't use `shadowBlur`: it hurts phone
-  frame rates. Fake glow with a wide, faint stroke under a crisp one.
+- The ship and block symbols are line art. Blocks are solid color and fade paler as
+  they take damage; hits show as soft particles, not lines. Don't use `shadowBlur`:
+  it hurts phone frame rates. Fake glow with a wide, faint stroke under a crisp one.

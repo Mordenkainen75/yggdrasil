@@ -120,7 +120,8 @@ to serve that feeling.
 - Mining speed starts at about 5 seconds per hex, reaches about 1 per second
   during region 1, and hits 10 or more per second by the end of the realm.
   Multi-hex tools carry that growth.
-- Hexes render in a few damage steps, shifting color as they weaken.
+- Hexes start in full color and fade paler in a few steps as they weaken, with no
+  crack lines. Hits show as soft particles in the block's color.
 - Early phone test needed: this many hexes is the main performance risk.
 
 ### Clearing
@@ -178,7 +179,7 @@ Ranks:
 - Two only: Huginn and Muninn. They deal no damage.
 - The map starts under fog, apart from a small area around the ship. Ravens fly
   out, return, and reveal the hexes they passed through.
-- They start with a reach of about 3 hexes. Recon is slow, and it's meant to feel
+- They start with a reach of 4 hexes. Recon is slow, and it's meant to feel
   like an expedition.
 - Ravens grow slowly, because their abilities are strong at any stage. Most levels
   are quiet, and every third level improves one trait in turn: speed, gem odds,

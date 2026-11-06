@@ -259,15 +259,15 @@ test('ravens improve every third level, one trait at a time, and ranks raise gem
     return computeStats(s);
   };
   const start = at(1);
-  assert.equal(Math.round(start.ravenRange / 10), 3);
+  assert.equal(Math.round(start.ravenRange / 10), 4);
   assert.equal(start.findValue, 2);
   assert.deepEqual(at(3), start, 'levels 2 and 3 are quiet');
   assert.ok(at(4).ravenSpeed > start.ravenSpeed);
   assert.equal(at(4).ravenRange, start.ravenRange);
   assert.ok(at(7).findChance > start.findChance);
-  assert.equal(Math.round(at(10).ravenRange / 10), 4, 'reach comes third');
+  assert.equal(Math.round(at(10).ravenRange / 10), 5, 'reach comes third');
   assert.ok(at(13).ravenSmart > start.ravenSmart);
-  assert.equal(Math.round(at(75).ravenRange / 10), 9, 'reach stays modest through Midgard');
+  assert.equal(Math.round(at(75).ravenRange / 10), 10, 'reach stays modest through Midgard');
   assert.equal(at(26).findValue, 5);
   assert.equal(at(26).ravenCount, 2);
   assert.equal(at(51).findValue, 10);

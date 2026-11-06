@@ -11,8 +11,6 @@ interface Particle {
   life: number;
   maxLife: number;
   size: number;
-  spin: number;
-  angle: number;
   color: string;
   home: boolean; // flies into the ship's hold
 }
@@ -36,14 +34,6 @@ interface Pop {
   color: string;
 }
 
-interface Beam {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  life: number;
-}
-
 interface Bolt {
   x0: number;
   y0: number;
@@ -60,14 +50,42 @@ const BERSERK = '#ff6a3c';
 const ICE = '#9fe8ff';
 const THUNDER = '#9fdcff';
 const STEEL = '#b9d6f2';
-const HEAT = ['rgba(255,190,90,0.12)', 'rgba(255,170,70,0.24)', 'rgba(255,140,50,0.38)', 'rgba(255,110,40,0.55)'];
+const NEUTRAL = '#d3dae2';
 
 const MAX_PARTICLES = 1100;
+const MAX_TICKS = 24; // silver numbers for plain blocks, so a big blast can't flood the screen
+const SPRITE_SIZE = 24;
 const HEX_INSET = 0.88;
 const CORNERS = Array.from({ length: 6 }, (_, i) => {
   const a = (Math.PI / 180) * (60 * i - 30);
   return [Math.cos(a), Math.sin(a)] as const;
 });
+
+// Each block has a full-color look, then fades paler as it's damaged.
+type Hsl = readonly [hue: number, saturation: number, lightness: number];
+const DAMAGE_STEPS = 5;
+const LOOK = { GOLD: 3, MEAD: 4, GAS: 5, FIND: 6 } as const; // 0 to 2 are rock, by depth
+const SPECIAL_LOOKS: Hsl[] = [[44, 88, 52], [28, 88, 50], [104, 58, 46], [194, 86, 56]];
+
+function rockLooks(hue: number): Hsl[] {
+  return [[hue, 52, 44], [hue, 55, 35], [hue, 58, 27]];
+}
+
+function shade([hue, saturation, lightness]: Hsl, step: number): string {
+  const worn = step / (DAMAGE_STEPS - 1);
+  return `hsl(${hue} ${saturation * (1 - 0.72 * worn)}% ${lightness + (86 - lightness) * 0.82 * worn}%)`;
+}
+
+function blockSpark(kind: number, hue: number): string {
+  switch (kind) {
+    case BLOCK.GOLD: return GOLD;
+    case BLOCK.MEAD: return MEAD;
+    case BLOCK.GAS: return GAS;
+    case BLOCK.FIND: return ICE;
+    case BLOCK.CORE: return '#ff4d3d';
+    default: return `hsl(${hue} 46% 66%)`;
+  }
+}
 
 function hexPath(path: Path2D | CanvasRenderingContext2D, x: number, y: number, size: number): void {
   for (let i = 0; i < 6; i++) {
@@ -96,7 +114,10 @@ export class Renderer {
   private rings: Ring[] = [];
   private pops: Pop[] = [];
   private bolts: Bolt[] = [];
-  private beams: Beam[] = [];
+  private ticks: Pop[] = [];
+  private sprites = new Map<string, HTMLCanvasElement>();
+  private colors: string[] = [];
+  private colorsHue = -1;
   private hits = new Map<number, number>();
   private stars: { x: number; y: number; depth: number; size: number }[] = [];
   private title: { name: string; sub: string; left: number } | null = null;
@@ -149,17 +170,48 @@ export class Renderer {
     if (this.particles.length >= MAX_PARTICLES) this.particles.shift();
     const maxLife = p.maxLife ?? 0.6;
     this.particles.push({
-      vx: 0, vy: 0, size: 4, spin: 0, angle: Math.random() * 6.28, home: false,
+      vx: 0, vy: 0, size: 2, home: false,
       life: maxLife, ...p, maxLife,
     });
   }
 
-  private shards(x: number, y: number, color: string, count: number, speed: number, life = 0.6): void {
+  private shards(x: number, y: number, color: string, count: number, speed: number, life = 0.6, scale = 1): void {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * 6.28;
       const v = speed * (0.4 + Math.random());
-      this.spawn({ x, y, color, vx: Math.cos(a) * v, vy: Math.sin(a) * v, size: 3 + Math.random() * 4, spin: (Math.random() - 0.5) * 14, maxLife: life * (0.6 + Math.random() * 0.6) });
+      this.spawn({ x, y, color, vx: Math.cos(a) * v, vy: Math.sin(a) * v, size: (1.6 + Math.random() * 2) * scale, maxLife: life * (0.6 + Math.random() * 0.6) });
     }
+  }
+
+  /** A soft round dot, drawn once per color and then stamped, which phones handle well. */
+  private sprite(color: string): HTMLCanvasElement {
+    let sprite = this.sprites.get(color);
+    if (sprite) return sprite;
+    sprite = document.createElement('canvas');
+    sprite.width = sprite.height = SPRITE_SIZE;
+    const g = sprite.getContext('2d') as CanvasRenderingContext2D;
+    const middle = SPRITE_SIZE / 2;
+    g.fillStyle = color;
+    g.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+    const fade = g.createRadialGradient(middle, middle, 0, middle, middle, middle);
+    fade.addColorStop(0, 'rgba(0,0,0,1)');
+    fade.addColorStop(0.35, 'rgba(0,0,0,0.75)');
+    fade.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalCompositeOperation = 'destination-in';
+    g.fillStyle = fade;
+    g.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+    this.sprites.set(color, sprite);
+    return sprite;
+  }
+
+  /** Every look at every damage step, rebuilt only when the region's stone changes. */
+  private blockColors(hue: number): string[] {
+    if (hue !== this.colorsHue) {
+      this.colorsHue = hue;
+      this.colors = [...rockLooks(hue), ...SPECIAL_LOOKS].flatMap((look) =>
+        Array.from({ length: DAMAGE_STEPS }, (_, step) => shade(look, step)));
+    }
+    return this.colors;
   }
 
   private ring(x: number, y: number, r: number, grow: number, life: number, color: string, width = 2): void {
@@ -174,10 +226,13 @@ export class Renderer {
     for (const e of s.events) {
       this.onEvent(e);
       switch (e.t) {
-        case 'hit':
-          this.hits.set(e.cell, 0.1);
-          if (e.drill) this.shards(s.region.wx[e.cell], s.region.wy[e.cell], FORGE, 1, 70, 0.3);
+        case 'hit': {
+          const x = s.region.wx[e.cell];
+          const y = s.region.wy[e.cell];
+          this.shards(x, y, blockSpark(s.region.kind[e.cell], s.region.hue), e.drill ? 3 : 2, 42, 0.5);
+          if (e.drill) this.shards(x, y, FORGE, 1, 85, 0.3, 0.8);
           break;
+        }
         case 'reveal':
           this.hits.set(e.cell, 0.25);
           break;
@@ -186,7 +241,13 @@ export class Renderer {
           this.pops.push({ x: e.x, y: e.y, text: 'FOUND', life: 1.2, color: ICE });
           break;
         case 'lance':
-          this.beams.push({ x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, life: 0.22 });
+          for (let k = 0; k <= 20; k++) {
+            const t = k / 20;
+            this.spawn({
+              x: e.x0 + (e.x1 - e.x0) * t, y: e.y0 + (e.y1 - e.y0) * t, color: ICE, size: 2.2,
+              vx: (Math.random() - 0.5) * 34, vy: (Math.random() - 0.5) * 34, maxLife: 0.2 + Math.random() * 0.25,
+            });
+          }
           break;
         case 'swing':
           this.shards(e.x + Math.cos(e.angle) * 9, e.y + Math.sin(e.angle) * 9, STEEL, 4, 90, 0.25);
@@ -212,25 +273,25 @@ export class Renderer {
           break;
         case 'mine': {
           if (e.kind === 0) {
-            this.shards(e.x, e.y, `hsl(${e.hue} 22% 62%)`, 1, 150, 1.6);
+            this.shards(e.x, e.y, blockSpark(BLOCK.ROCK, e.hue), 1, 150, 1.6);
             break;
           }
-          const color = e.kind === BLOCK.GOLD ? GOLD : e.kind === BLOCK.MEAD ? MEAD : e.kind === BLOCK.GAS ? GAS : e.kind === BLOCK.FIND ? ICE : `hsl(${e.hue} 22% 70%)`;
-          this.shards(e.x, e.y, color, e.kind === BLOCK.ROCK ? 3 : 7, 60);
-          this.ring(e.x, e.y, 2, 34, 0.2, color, 1);
+          const color = blockSpark(e.kind, e.hue);
+          this.shards(e.x, e.y, color, e.kind === BLOCK.ROCK ? 9 : 12, 72);
           this.spawn({ x: e.x, y: e.y, color: '#dfe9f2', home: true, size: 2, maxLife: 0.8, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60 });
           if (e.kind === BLOCK.GOLD || e.kind === BLOCK.FIND) {
             this.pops.push({ x: e.x, y: e.y, text: `+${fmt(e.value)}`, life: 1, color: e.kind === BLOCK.FIND ? ICE : GOLD });
             this.ring(e.x, e.y, 4, 60, 0.4, GOLD);
-          } else if (e.kind === BLOCK.MEAD) {
-            this.ring(e.x, e.y, 4, 110, 0.5, MEAD);
+          } else if (e.kind !== BLOCK.CORE && this.ticks.length < MAX_TICKS) {
+            this.ticks.push({ x: e.x, y: e.y, text: `+${fmt(e.value)}`, life: 0.8, color: NEUTRAL });
           }
+          if (e.kind === BLOCK.MEAD) this.ring(e.x, e.y, 4, 110, 0.5, MEAD);
           break;
         }
         case 'burst':
           this.ring(e.x, e.y, 6, 170, 0.45, FORGE, 3);
           this.ring(e.x, e.y, 2, 90, 0.35, '#fff0c8', 2);
-          this.shards(e.x, e.y, '#ff9d4f', 14, 150);
+          this.shards(e.x, e.y, '#ff9d4f', 22, 150, 0.6, 1.4);
           this.addShake(3);
           break;
         case 'bolt':
@@ -243,8 +304,8 @@ export class Renderer {
           for (let i = 0; i < 4; i++) {
             this.ring(e.x, e.y, 10 + i * 14, 420 - i * 70, 1.2 + i * 0.25, i % 2 ? '#ffb454' : '#ffffff', 4 - i * 0.6);
           }
-          this.shards(e.x, e.y, '#ffffff', 60, 320, 1.4);
-          this.shards(e.x, e.y, '#ffb454', 60, 200, 1.8);
+          this.shards(e.x, e.y, '#ffffff', 60, 320, 1.4, 1.6);
+          this.shards(e.x, e.y, '#ffb454', 60, 200, 1.8, 1.8);
           if (e.bonus > 0) this.pops.push({ x: e.x, y: e.y - 20, text: `COLLAPSE +${fmt(e.bonus)}`, life: 2, color: '#ffb454' });
           break;
         case 'region':
@@ -363,16 +424,12 @@ export class Renderer {
     }
 
     const size = HEX_SIZE * HEX_INSET;
-    // One path per look: a single stroke call per colour keeps phones at 60fps.
-    const rock = [new Path2D(), new Path2D(), new Path2D()];
-    const cracks = new Path2D();
-    const gold = new Path2D();
-    const mead = new Path2D();
-    const gas = new Path2D();
+    // One path per color: a single draw call for each keeps phones at 60fps.
+    const colors = this.blockColors(hue);
+    const bodies = colors.map(() => new Path2D());
+    const glyphs = new Path2D();
     const flashes = new Path2D();
     const fog = new Path2D();
-    const finds = new Path2D();
-    const heat = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
     const beat = 0.5 + 0.5 * Math.sin(this.time * 4);
 
     for (const i of p.cells) {
@@ -386,100 +443,72 @@ export class Renderer {
         continue;
       }
 
-      if (kind === BLOCK.ROCK) hexPath(rock[Math.min(2, Math.floor(p.depth[i] * 3))], x, y, size);
+      let look = -1;
+      if (kind === BLOCK.ROCK) look = Math.min(2, Math.floor(p.depth[i] * 3));
       else if (kind === BLOCK.GOLD) {
         // A faceted nugget.
-        hexPath(gold, x, y, size);
-        gold.moveTo(x, y - size * 0.44);
-        gold.lineTo(x + size * 0.38, y);
-        gold.lineTo(x, y + size * 0.44);
-        gold.lineTo(x - size * 0.38, y);
-        gold.closePath();
+        look = LOOK.GOLD;
+        glyphs.moveTo(x, y - size * 0.44);
+        glyphs.lineTo(x + size * 0.38, y);
+        glyphs.lineTo(x, y + size * 0.44);
+        glyphs.lineTo(x - size * 0.38, y);
+        glyphs.closePath();
       } else if (kind === BLOCK.FIND) {
         // A four-pointed gem.
+        look = LOOK.FIND;
         const r = size * 0.62;
-        hexPath(finds, x, y, size);
-        finds.moveTo(x, y - r);
-        finds.lineTo(x + r * 0.28, y - r * 0.28);
-        finds.lineTo(x + r, y);
-        finds.lineTo(x + r * 0.28, y + r * 0.28);
-        finds.lineTo(x, y + r);
-        finds.lineTo(x - r * 0.28, y + r * 0.28);
-        finds.lineTo(x - r, y);
-        finds.lineTo(x - r * 0.28, y - r * 0.28);
-        finds.closePath();
+        glyphs.moveTo(x, y - r);
+        glyphs.lineTo(x + r * 0.28, y - r * 0.28);
+        glyphs.lineTo(x + r, y);
+        glyphs.lineTo(x + r * 0.28, y + r * 0.28);
+        glyphs.lineTo(x, y + r);
+        glyphs.lineTo(x - r * 0.28, y + r * 0.28);
+        glyphs.lineTo(x - r, y);
+        glyphs.lineTo(x - r * 0.28, y - r * 0.28);
+        glyphs.closePath();
       } else if (kind === BLOCK.MEAD) {
         // A banded cask that swells very slightly.
+        look = LOOK.MEAD;
         const r = size * (0.42 + 0.03 * beat);
-        hexPath(mead, x, y, size);
-        mead.moveTo(x + r * 0.78, y);
-        mead.ellipse(x, y, r * 0.78, r * 1.08, 0, 0, 6.3);
-        mead.moveTo(x - r * 0.76, y - r * 0.4);
-        mead.lineTo(x + r * 0.76, y - r * 0.4);
-        mead.moveTo(x - r * 0.76, y + r * 0.4);
-        mead.lineTo(x + r * 0.76, y + r * 0.4);
+        glyphs.moveTo(x + r * 0.78, y);
+        glyphs.ellipse(x, y, r * 0.78, r * 1.08, 0, 0, 6.3);
+        glyphs.moveTo(x - r * 0.76, y - r * 0.4);
+        glyphs.lineTo(x + r * 0.76, y - r * 0.4);
+        glyphs.moveTo(x - r * 0.76, y + r * 0.4);
+        glyphs.lineTo(x + r * 0.76, y + r * 0.4);
       } else if (kind === BLOCK.GAS) {
         // Three rising bubbles.
+        look = LOOK.GAS;
         const rise = size * 0.06 * beat;
-        hexPath(gas, x, y, size);
-        gas.moveTo(x + size * 0.04, y + size * 0.16);
-        gas.arc(x - size * 0.2, y + size * 0.16, size * 0.24, 0, 6.3);
-        gas.moveTo(x + size * 0.44, y - size * 0.1 - rise);
-        gas.arc(x + size * 0.28, y - size * 0.1 - rise, size * 0.16, 0, 6.3);
-        gas.moveTo(x + size * 0.08, y - size * 0.38 - rise);
-        gas.arc(x - size * 0.02, y - size * 0.38 - rise, size * 0.1, 0, 6.3);
+        glyphs.moveTo(x + size * 0.04, y + size * 0.16);
+        glyphs.arc(x - size * 0.2, y + size * 0.16, size * 0.24, 0, 6.3);
+        glyphs.moveTo(x + size * 0.44, y - size * 0.1 - rise);
+        glyphs.arc(x + size * 0.28, y - size * 0.1 - rise, size * 0.16, 0, 6.3);
+        glyphs.moveTo(x + size * 0.08, y - size * 0.38 - rise);
+        glyphs.arc(x - size * 0.02, y - size * 0.38 - rise, size * 0.1, 0, 6.3);
       }
 
-      const health = p.hp[i] / p.maxHp[i];
-      if (kind !== BLOCK.CORE && health < 1) {
-        // The hex heats up in steps as it's worked, so progress is always visible.
-        hexPath(heat[Math.min(3, Math.floor((1 - health) * 4))], x, y, size);
-        if (health < 0.5) {
-          const corner = CORNERS[(i * 7) % 6];
-          cracks.moveTo(x + corner[0] * size, y + corner[1] * size);
-          cracks.lineTo(x + corner[1] * size * 0.2, y - corner[0] * size * 0.2);
-        }
+      if (look >= 0) {
+        // Full color until it's touched, then paler in steps as it's worked.
+        const health = p.hp[i] / p.maxHp[i];
+        const step = health >= 1 ? 0 : 1 + Math.min(DAMAGE_STEPS - 2, Math.floor((1 - health) * (DAMAGE_STEPS - 1)));
+        hexPath(bodies[look * DAMAGE_STEPS + step], x, y, size);
       }
       if (this.hits.has(i)) hexPath(flashes, x, y, size);
     }
 
-    const shades = [`hsl(${hue} 16% 24%)`, `hsl(${hue} 14% 17%)`, `hsl(${hue} 12% 12%)`];
-    const strokes = [`hsl(${hue} 26% 64%)`, `hsl(${hue} 24% 53%)`, `hsl(${hue} 22% 44%)`];
     ctx.lineWidth = line;
     ctx.lineJoin = 'round';
-    for (let t = 0; t < 3; t++) {
-      ctx.fillStyle = shades[t];
-      ctx.strokeStyle = strokes[t];
-      ctx.fill(rock[t]);
-      ctx.stroke(rock[t]);
-    }
-    ctx.fillStyle = 'rgba(255,215,106,0.16)';
-    ctx.strokeStyle = GOLD;
-    ctx.fill(gold);
-    ctx.stroke(gold);
-    ctx.fillStyle = 'rgba(255,159,69,0.16)';
-    ctx.strokeStyle = MEAD;
-    ctx.fill(mead);
-    ctx.stroke(mead);
-    ctx.fillStyle = 'rgba(155,227,122,0.14)';
-    ctx.strokeStyle = GAS;
-    ctx.fill(gas);
-    ctx.stroke(gas);
-    ctx.fillStyle = 'rgba(159,232,255,0.2)';
-    ctx.strokeStyle = ICE;
-    ctx.fill(finds);
-    ctx.stroke(finds);
+    bodies.forEach((body, n) => {
+      ctx.fillStyle = colors[n];
+      ctx.fill(body);
+    });
+    ctx.strokeStyle = 'rgba(7,10,16,0.72)';
+    ctx.stroke(glyphs);
     ctx.fillStyle = `hsl(${hue} 12% 8%)`;
     ctx.strokeStyle = `hsla(${hue},14%,34%,0.4)`;
     ctx.fill(fog);
     ctx.stroke(fog);
-    HEAT.forEach((color, step) => {
-      ctx.fillStyle = color;
-      ctx.fill(heat[step]);
-    });
-    ctx.strokeStyle = 'rgba(7,10,16,0.85)';
-    ctx.lineWidth = line * 1.2;
-    ctx.stroke(cracks);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.fill(flashes);
 
@@ -722,8 +751,6 @@ export class Renderer {
 
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
-    const lineWidth = 1.5 / this.zoom;
-    ctx.lineWidth = lineWidth;
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
@@ -745,15 +772,8 @@ export class Renderer {
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.angle += p.spin * dt;
       ctx.globalAlpha = Math.min(1, (p.life / p.maxLife) * 1.5);
-      ctx.strokeStyle = p.color;
-      const c = Math.cos(p.angle) * p.size;
-      const n = Math.sin(p.angle) * p.size;
-      ctx.beginPath();
-      ctx.moveTo(p.x - c, p.y - n);
-      ctx.lineTo(p.x + c, p.y + n);
-      ctx.stroke();
+      ctx.drawImage(this.sprite(p.color), p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
     }
 
     for (let i = this.rings.length - 1; i >= 0; i--) {
@@ -771,21 +791,6 @@ export class Renderer {
       ctx.arc(r.x, r.y, r.r, 0, 6.3);
       ctx.stroke();
     }
-    for (let i = this.beams.length - 1; i >= 0; i--) {
-      const b = this.beams[i];
-      b.life -= dt;
-      if (b.life <= 0) {
-        this.beams.splice(i, 1);
-        continue;
-      }
-      ctx.globalAlpha = Math.min(1, b.life * 6);
-      ctx.strokeStyle = ICE;
-      ctx.lineWidth = 2.4 / this.zoom;
-      ctx.beginPath();
-      ctx.moveTo(b.x0, b.y0);
-      ctx.lineTo(b.x1, b.y1);
-      ctx.stroke();
-    }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 
@@ -800,18 +805,29 @@ export class Renderer {
       ctx.stroke();
     }
 
+    // Plain blocks underneath, so gold and gems always read on top.
     ctx.textAlign = 'center';
-    ctx.font = `700 ${13 / this.zoom}px ui-monospace, monospace`;
-    for (let i = this.pops.length - 1; i >= 0; i--) {
-      const p = this.pops[i];
+    this.drawPops(this.ticks, `600 ${11 / this.zoom}px ui-monospace, monospace`, dt);
+    this.drawPops(this.pops, `700 ${13 / this.zoom}px ui-monospace, monospace`, dt);
+  }
+
+  private drawPops(pops: Pop[], font: string, dt: number): void {
+    const { ctx } = this;
+    ctx.font = font;
+    ctx.strokeStyle = 'rgba(7,10,16,0.8)';
+    ctx.lineWidth = 2.4 / this.zoom;
+    ctx.lineJoin = 'round';
+    for (let i = pops.length - 1; i >= 0; i--) {
+      const p = pops[i];
       p.life -= dt;
       p.y -= (24 / this.zoom) * dt;
       if (p.life <= 0) {
-        this.pops.splice(i, 1);
+        pops.splice(i, 1);
         continue;
       }
       ctx.globalAlpha = Math.min(1, p.life * 2);
       ctx.fillStyle = p.color;
+      ctx.strokeText(p.text, p.x, p.y);
       ctx.fillText(p.text, p.x, p.y);
     }
     ctx.globalAlpha = 1;

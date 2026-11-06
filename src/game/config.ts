@@ -76,7 +76,7 @@ export const GAS = { rings: 3, hpShare: 0.3, drillShare: 3 };
 export const RAVENS = {
   levelCycle: ['speed', 'find', 'reach', 'smart'] as const,
   levelsPerStep: 3,
-  reachHexes: 3,
+  reachHexes: 4,
   speed: 8,
   speedStep: 1.12,
   findChance: 0.2, // chance per trip of finding one gem

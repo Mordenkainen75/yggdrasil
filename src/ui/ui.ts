@@ -42,16 +42,17 @@ const DESCRIPTIONS: Record<UpgradeId, string> = {
 
 function effect(id: UpgradeId, st: Stats): string {
   const every = (seconds: number) => `every ${seconds.toFixed(1)}s`;
+  const dps = (damage: number, seconds: number) => `${fmt(damage / seconds)} DPS`;
   switch (id) {
-    case 'drill': return `${fmt(st.drillDamage)} damage, ${st.drillRate.toFixed(1)} hits/s`;
+    case 'drill': return `${fmt(st.drillDamage * st.drillRate)} DPS (${fmt(st.drillDamage)} damage, ${st.drillRate.toFixed(1)} hits/s)`;
     case 'ravens': return `Reach ${Math.round(st.ravenRange / 10)}, ${Math.round(st.findChance * 100)}% gem per trip, x${st.findValue}`;
     case 'smelter': return `Silver x${fmt(st.silverMul)}`;
     case 'forge': return `Work rate x${(st.drillRate / 3).toFixed(2)}`;
-    case 'haulers': return `${st.pods} pod${st.pods === 1 ? '' : 's'}, ${fmt(st.cutDamage)} cut ${every(st.cutEvery)}`;
-    case 'sweep': return `${fmt(st.sweepDamage)} to 3 hexes ${every(st.sweepEvery)}`;
-    case 'lance': return `${fmt(st.lanceDamage)} to ${TOOL_SHAPES.lanceHexes} hexes ${every(st.lanceEvery)}`;
-    case 'thunder': return `${fmt(st.thunderDamage)} to a cluster ${every(st.thunderEvery)}`;
-    case 'pulse': return `${fmt(st.pulseDamage)} in a ring ${every(st.pulseEvery)}`;
+    case 'haulers': return `${st.pods} pod${st.pods === 1 ? '' : 's'}, ${fmt(st.cutDamage)} cut ${every(st.cutEvery)}, ${dps(st.cutDamage * st.pods, st.cutEvery)}`;
+    case 'sweep': return `${fmt(st.sweepDamage)} to 3 hexes ${every(st.sweepEvery)}, ${dps(st.sweepDamage, st.sweepEvery)} each`;
+    case 'lance': return `${fmt(st.lanceDamage)} to ${TOOL_SHAPES.lanceHexes} hexes ${every(st.lanceEvery)}, ${dps(st.lanceDamage, st.lanceEvery)} each`;
+    case 'thunder': return `${fmt(st.thunderDamage)} to a cluster ${every(st.thunderEvery)}, ${dps(st.thunderDamage, st.thunderEvery)} each`;
+    case 'pulse': return `${fmt(st.pulseDamage)} in a ring ${every(st.pulseEvery)}, ${dps(st.pulseDamage, st.pulseEvery)} each`;
   }
 }
 
@@ -263,7 +264,7 @@ export class Ui {
       <div class="rune-list">${chips}</div>
       <div class="section">Ship</div>
       <dl class="stats">
-        <dt>Drill</dt><dd>${fmt(st.drillDamage)} x ${st.drillRate.toFixed(1)}/s</dd>
+        <dt>Drill</dt><dd>${fmt(st.drillDamage * st.drillRate)} DPS (${fmt(st.drillDamage)} x ${st.drillRate.toFixed(1)}/s)</dd>
         <dt>Hauler cutting</dt><dd>${fmt(st.cutDamage)} x ${st.pods} pods</dd>
         <dt>Silver multiplier</dt><dd>x${fmt(st.silverMul)}</dd>
         <dt>Away earnings</dt><dd>${Math.round(offlineShare(s) * 100)}%, up to ${fmtTime(offlineCapSeconds(s))}</dd>
