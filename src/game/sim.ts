@@ -397,22 +397,22 @@ function launchRaven(s: GameState, st: Stats, r: Raven): void {
   r.lastCell = -1;
 }
 
-/** A trip finds at most one gem. Rare ore exists only if a raven finds it. */
+/** Each uncharted rock hex a trip reports has its own gem chance. Rare ore exists only if a raven finds it. */
 function reportTrip(s: GameState, st: Stats, r: Raven): void {
   const p = s.region;
   const cells = [...r.path];
   r.path.clear();
   s.reveal.push(...cells);
-  if (Math.random() >= st.findChance) return;
-  const rock = cells.filter((cell) => p.kind[cell] === BLOCK.ROCK);
-  if (rock.length > 0) p.kind[rock[Math.floor(Math.random() * rock.length)]] = BLOCK.FIND;
+  for (const cell of cells) {
+    if (p.kind[cell] === BLOCK.ROCK && p.seen[cell] === 0 && Math.random() < st.findChance) p.kind[cell] = BLOCK.FIND;
+  }
 }
 
 function updateRavens(s: GameState, st: Stats, dt: number): void {
   const w = s.ship;
   const p = s.region;
   while (s.ravens.length < st.ravenCount) {
-    s.ravens.push({ x: w.x, y: w.y, state: 'rest', wait: s.ravens.length * RAVENS.restSeconds, tx: 0, ty: 0, path: new Set(), lastCell: -1 });
+    s.ravens.push({ x: w.x, y: w.y, state: 'rest', wait: RAVENS.restSeconds + s.ravens.length * RAVENS.staggerSeconds, tx: 0, ty: 0, path: new Set(), lastCell: -1 });
   }
   for (const r of s.ravens) {
     if (r.state === 'rest') {
@@ -426,7 +426,7 @@ function updateRavens(s: GameState, st: Stats, dt: number): void {
     const tx = homeward ? w.x : r.tx;
     const ty = homeward ? w.y : r.ty;
     const dist = Math.hypot(tx - r.x, ty - r.y);
-    const move = st.ravenSpeed * dt * (s.phase === 'mining' ? 1 : 4);
+    const move = st.ravenSpeed * dt * (s.phase !== 'mining' ? 4 : homeward ? RAVENS.returnSpeed : 1);
     if (dist <= Math.max(move, 3)) {
       if (!homeward) {
         r.state = 'back';

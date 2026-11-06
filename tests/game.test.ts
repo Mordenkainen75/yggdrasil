@@ -303,19 +303,23 @@ test('berserk refills on its own, slowly, and mead speeds it up', () => {
   assert.ok(Math.abs(s.berserkCharge - 0.1) < 0.02, `${s.berserkCharge}`);
 });
 
-test('a raven trip finds at most one gem, and gems exist only if found', () => {
+test('each uncharted rock hex a raven reports rolls its own gem, and gems exist only if found', () => {
   assert.equal(makeRegion(0, 3).kind.filter((k) => k === BLOCK.FIND).length, 0, 'none are generated');
   const s = newGame(11);
   const p = s.region;
   s.upgrades.ravens = 1;
-  const rock = [...p.cells].filter((i) => p.kind[i] === BLOCK.ROCK).slice(0, 30);
+  const rock = [...p.cells].filter((i) => p.kind[i] === BLOCK.ROCK && p.seen[i] === 0).slice(0, 30);
+  p.seen[rock[0]] = 1; // already charted: no gem there
   s.ravens.push({ x: s.ship.x, y: s.ship.y, state: 'back', wait: 0, tx: 0, ty: 0, path: new Set(rock), lastCell: -1 });
   const chance = Math.random;
-  Math.random = () => 0;
+  let roll = 0;
+  Math.random = () => (roll++ % 2 === 0 ? 0 : 0.99); // every other roll hits
   step(s, TICK);
   Math.random = chance;
   const gems = rock.filter((i) => p.kind[i] === BLOCK.FIND);
-  assert.equal(gems.length, 1);
+  assert.equal(p.kind[rock[0]], BLOCK.ROCK);
+  assert.ok(gems.length > 1, `one trip can find several gems (${gems.length})`);
+  assert.ok(gems.length < rock.length - 1, 'but not every hex');
   const loaded = deserialize(serialize(s, 1000));
   assert.ok(loaded);
   assert.equal(loaded.region.kind[gems[0]], BLOCK.FIND);

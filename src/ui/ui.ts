@@ -45,7 +45,7 @@ function effect(id: UpgradeId, st: Stats): string {
   const dps = (damage: number, seconds: number) => `${fmt(damage / seconds)} DPS`;
   switch (id) {
     case 'drill': return `${fmt(st.drillDamage * st.drillRate)} DPS (${fmt(st.drillDamage)} damage, ${st.drillRate.toFixed(1)} hits/s)`;
-    case 'ravens': return `Reach ${Math.round(st.ravenRange / 10)}, ${Math.round(st.findChance * 100)}% gem per trip, x${st.findValue}`;
+    case 'ravens': return `Reach ${Math.round(st.ravenRange / 10)}, ${(st.findChance * 100).toFixed(1)}% gem per hex, x${st.findValue}`;
     case 'smelter': return `Silver x${fmt(st.silverMul)}`;
     case 'forge': return `Work rate x${(st.drillRate / 3).toFixed(2)}`;
     case 'haulers': return `${st.pods} pod${st.pods === 1 ? '' : 's'}, ${fmt(st.cutDamage)} cut ${every(st.cutEvery)}, ${dps(st.cutDamage * st.pods, st.cutEvery)}`;

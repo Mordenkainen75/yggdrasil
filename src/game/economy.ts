@@ -117,7 +117,7 @@ export function computeStats(s: GameState): Stats {
     ravenCount: u.ravens <= 0 ? 0 : rankOf(u.ravens) >= 1 ? 2 : 1,
     ravenRange: (RAVENS.reachHexes + raven.reach) * 10 * 1.3 ** m.ansuz,
     ravenSpeed: RAVENS.speed * RAVENS.speedStep ** raven.speed * 1.2 ** m.ansuz,
-    ravenWidth: 1 + rankOf(u.ravens),
+    ravenWidth: RAVENS.width,
     ravenSmart: Math.min(1, RAVENS.smart + RAVENS.smartStep * raven.smart),
     findChance: u.ravens <= 0 ? 0 : RAVENS.findChance + RAVENS.findStep * raven.find,
     findValue: RAVENS.findValues[Math.min(RAVENS.findValues.length - 1, rankOf(u.ravens))],

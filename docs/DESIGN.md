@@ -178,17 +178,21 @@ Ranks:
 
 - Two only: Huginn and Muninn. They deal no damage.
 - The map starts under fog, apart from a small area around the ship. Ravens fly
-  out, return, and reveal the hexes they passed through.
+  out, scouting the hexes they cross and their neighbors, then hurry home (three
+  times as fast) to report, and launch again after a short rest. Only the flight
+  out scouts.
 - They start with a reach of 4 hexes. Recon is slow, and it's meant to feel
   like an expedition.
 - Ravens grow slowly, because their abilities are strong at any stage. Most levels
   are quiet, and every third level improves one trait in turn: speed, gem odds,
   reach, then smarter scouting (how often a raven heads for uncharted hexes rather
-  than a random direction). Ranks add width, the second raven and gem value.
+  than a random direction). Ranks add the second raven and gem value; the scouted
+  path stays one hex either side.
 - Idea for later realms: unfamiliar land. A new realm subtracts levels from the
   ravens (Hel might take 50, two ranks), so they rebuild there. The penalty should
   show on screen, with a reason, and fall as the clan learns the realm.
-- A trip finds at most one gem. Gems exist only if found: mined undiscovered, that
+- Each uncharted rock hex a trip reports has a small gem chance (2% at first),
+  so one trip can find several. Gems exist only if found: mined undiscovered, that
   hex pays as plain rock. Gems pay x2, x5, x10, then x15 by raven rank.
 
 ### Vision and targeting

@@ -79,11 +79,14 @@ export const RAVENS = {
   reachHexes: 4,
   speed: 8,
   speedStep: 1.12,
-  findChance: 0.2, // chance per trip of finding one gem
-  findStep: 0.025,
+  findChance: 0.02, // chance per uncharted rock hex a trip reports
+  findStep: 0.0025,
   smart: 0.25, // chance of heading for uncharted hexes instead of a random direction
   smartStep: 0.1,
-  restSeconds: 10,
+  width: 1, // rings scouted either side of the flight path: the hexes crossed and their neighbors
+  returnSpeed: 3, // the flight home is this much faster, so a raven catches a ship that moved on
+  restSeconds: 1.5,
+  staggerSeconds: 3, // the second raven's first launch waits this long
   revealPerTick: 3,
   findValues: [2, 5, 10, 15],
 };
