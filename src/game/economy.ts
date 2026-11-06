@@ -125,7 +125,7 @@ export function computeStats(s: GameState): Stats {
     blastMul: 1.25 ** m.kenaz,
     rockPayMul: 0.8 ** m.fehu,
     goldPayMul: 1.6 ** m.fehu,
-    goldPull: m.fehu > 0 ? 130 : 80,
+    goldPull: m.fehu > 0 ? 150 : 92,
     corePayMul: 1.5 ** m.tiwaz,
     coreOpenAt: m.tiwaz > 0 ? 0.8 : m.jera > 0 ? 0.12 : REGION.coreOpenAt,
     coreHuntAt: m.tiwaz > 0 ? 0.8 : REGION.coreHuntAt,

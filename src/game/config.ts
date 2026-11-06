@@ -40,10 +40,12 @@ export const SHIP = {
   sightRays: 30,
   sightEvery: 0.2, // seconds between looks around
   trailSampleDist: 2,
-  samplesPerSegment: 3,
+  samplesPerSegment: 5, // trail samples between pods: one hex apart
   drillRate: 3, // hits per second
-  haulerRadius: 4.2,
+  podLength: 7.2, // a pod fills most of a hex, a little narrower than the flagship's hull
+  podWidth: 8.4,
   drawScale: 0.62,
+  drillTip: 11.8, // world units ahead of the ship's centre: 19 drawn units at drawScale
   maxPods: 9,
 };
 
@@ -55,15 +57,17 @@ export const BERSERK = {
   rechargeSeconds: 180, // fills on its own this slowly; mead is the fast way
 };
 
-// How much the ship wants a block, in distance units. Damaged beats special beats
-// normal, nearby. A far block can still lose to a near one, which keeps it from
-// crossing the map for every scratch. Hidden behind rock, a bonus counts for less.
+// How much the ship wants a block, in distance units. Blocks touching the drill tip
+// come first, so it keeps chewing the face it's on; specials and badly worn blocks
+// can still draw it a few hexes away. Hidden behind rock, a bonus counts for less.
 export const TARGETING = {
-  damaged: 140,
+  damaged: 70, // for a block worn nearly away; a light chip pulls far less
+  adjacent: 30, // touching the drill tip: it keeps chewing the face it's on
+  tipReach: 12, // how close to the drill tip counts as touching
   aheadWeight: 0.35,
   gemMul: 1.4, // gems, as a multiple of gold
-  mead: 70,
-  gas: 55,
+  mead: 80,
+  gas: 63,
   buriedShare: 0.4,
   openSide: 2,
 };

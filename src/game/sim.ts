@@ -126,9 +126,9 @@ function runBlasts(s: GameState, st: Stats): void {
 }
 
 /**
- * How much the ship wants a block; lower wins. Nearby, damaged beats special beats
- * normal, and open sides break the ties, so it finishes what it started and clears
- * a face instead of boring tunnels.
+ * How much the ship wants a block; lower wins. Blocks touching the drill tip come
+ * first, specials and worn blocks pull from nearby, and open sides break the ties,
+ * so it clears a face instead of boring tunnels.
  */
 function scoreCell(s: GameState, st: Stats, i: number, cos: number, sin: number): number {
   const p = s.region;
@@ -143,13 +143,15 @@ function scoreCell(s: GameState, st: Stats, i: number, cos: number, sin: number)
     const n = neighbourOf(p, i, dir);
     if (n < 0 || p.kind[n] === BLOCK.EMPTY) open += 1;
   }
-  let bonus = 0;
-  if (p.hp[i] < p.maxHp[i]) bonus = TARGETING.damaged;
-  else if (kind === BLOCK.FIND) bonus = st.goldPull * TARGETING.gemMul;
-  else if (kind === BLOCK.GOLD) bonus = st.goldPull;
-  else if (kind === BLOCK.MEAD) bonus = TARGETING.mead;
-  else if (kind === BLOCK.GAS) bonus = TARGETING.gas;
+  // Chips from pods and tools pull only as much as they've worn the block down.
+  let bonus = TARGETING.damaged * (1 - p.hp[i] / p.maxHp[i]);
+  if (kind === BLOCK.FIND) bonus += st.goldPull * TARGETING.gemMul;
+  else if (kind === BLOCK.GOLD) bonus += st.goldPull;
+  else if (kind === BLOCK.MEAD) bonus += TARGETING.mead;
+  else if (kind === BLOCK.GAS) bonus += TARGETING.gas;
   if (open === 0) bonus *= TARGETING.buriedShare;
+  const tip = SHIP.drillTip;
+  if (Math.hypot(dx - cos * tip, dy - sin * tip) <= TARGETING.tipReach) bonus += TARGETING.adjacent;
   return dist * (1.4 - TARGETING.aheadWeight * ahead) - bonus - open * TARGETING.openSide;
 }
 

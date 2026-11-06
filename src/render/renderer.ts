@@ -625,8 +625,8 @@ export class Renderer {
       const len = Math.hypot(dx, dy) || 1;
       const ux = dx / len;
       const uy = dy / len;
-      const hl = 2.2;
-      const hw = SHIP.haulerRadius * 0.74 * (1 - (i / (n + 1)) ** 2 * 0.3);
+      const hl = SHIP.podLength / 2;
+      const hw = (SHIP.podWidth / 2) * (1 - (i / (n + 1)) ** 2 * 0.3);
       const fx = xs[i] + ux * hl;
       const fy = ys[i] + uy * hl;
       const rx = xs[i] - ux * hl;
@@ -639,10 +639,10 @@ export class Renderer {
       links.moveTo(fx, fy);
       links.lineTo(xs[i - 1] - ux * (i === 1 ? 7 : hl), ys[i - 1] - uy * (i === 1 ? 7 : hl));
       for (const side of [-1, 1]) {
-        const sx = xs[i] - uy * side * (hw + 0.4);
-        const sy = ys[i] + ux * side * (hw + 0.4);
-        shields.moveTo(sx + 1, sy);
-        shields.arc(sx, sy, 1, 0, 6.3);
+        const sx = xs[i] - uy * side * (hw + 0.6);
+        const sy = ys[i] + ux * side * (hw + 0.6);
+        shields.moveTo(sx + 1.4, sy);
+        shields.arc(sx, sy, 1.4, 0, 6.3);
       }
     }
 

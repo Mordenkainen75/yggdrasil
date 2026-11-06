@@ -201,8 +201,10 @@ Ranks:
   solid hex. Stonesight, a later upgrade, could let sight lines pass through rock.
 - The ship finishes its current block before choosing another.
 - Priority: the player's tap, then the Worldheart once it's open and 10% of the
-  region is left, then the best visible block: damaged beats special beats normal,
-  nearby, with open sides breaking ties.
+  region is left, then the best visible block. A block touching the drill tip
+  comes first, so the ship keeps chewing its face. Specials can still draw it a few
+  hexes away, and so can blocks that pods or tools have worn down, by how worn they
+  are. Open sides break ties.
 - A tap holds until that block is gone.
 
 ### Haulers and cargo

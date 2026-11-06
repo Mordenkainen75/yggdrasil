@@ -6,7 +6,7 @@ import {
   openRuneOffer, passSaga, rankLevel, rankOf, upgradeCost, upgradeDef,
 } from '../src/game/economy.ts';
 import { hexToWorldX, hexToWorldY, worldToHex } from '../src/game/hex.ts';
-import { cellAt, forEachInRange, makeRegion } from '../src/game/region.ts';
+import { cellAt, forEachInRange, makeRegion, neighbourOf } from '../src/game/region.ts';
 import { deserialize, serialize } from '../src/game/save.ts';
 import { setWaypoint, step, triggerBerserk } from '../src/game/sim.ts';
 import { newGame, type GameState } from '../src/game/state.ts';
@@ -273,27 +273,33 @@ test('ravens improve every third level, one trait at a time, and ranks raise gem
   assert.equal(at(51).findValue, 10);
 });
 
-test('the ship prefers damaged blocks, then special ones, then normal ones', () => {
+test('the ship prefers blocks at its drill tip, then special ones, then worn ones, then normal ones', () => {
   const s = newGame(27);
   const p = s.region;
   p.seen.fill(1);
-  s.ship.x = 0;
-  s.ship.y = 0;
-  s.ship.angle = 0;
+  const pick = (): number => {
+    Object.assign(s.ship, { x: 0, y: 0, angle: 0, target: -1 });
+    step(s, TICK);
+    return s.ship.target;
+  };
   const cleared = [...p.cells].filter((i) => Math.hypot(p.wx[i], p.wy[i]) < 30);
   for (const i of cleared) {
     if (i !== p.core) p.kind[i] = BLOCK.EMPTY;
   }
-  const ring = [...p.cells].filter((i) => p.kind[i] === BLOCK.ROCK && Math.hypot(p.wx[i], p.wy[i]) < 36);
-  const damaged = ring[3];
-  const gold = ring[Math.floor(ring.length / 2)];
+  const ring = [...p.cells].filter((i) => p.kind[i] !== BLOCK.EMPTY && i !== p.core && Math.hypot(p.wx[i], p.wy[i]) < 46);
+  for (const i of ring) p.kind[i] = BLOCK.ROCK;
+  const faces = ring.filter((i) => [0, 1, 2, 3, 4, 5].some((d) => p.kind[neighbourOf(p, i, d)] === BLOCK.EMPTY));
+  const worn = faces[3];
+  const gold = faces[Math.floor(faces.length / 2)];
   p.kind[gold] = BLOCK.GOLD;
-  step(s, TICK);
-  assert.equal(s.ship.target, gold, 'special beats normal');
-  p.hp[damaged] = p.maxHp[damaged] * 0.5;
-  s.ship.target = -1;
-  step(s, TICK);
-  assert.equal(s.ship.target, damaged, 'damaged beats special');
+  assert.equal(pick(), gold, 'special beats normal');
+  p.hp[worn] = p.maxHp[worn] * 0.2;
+  p.kind[gold] = BLOCK.ROCK;
+  assert.equal(pick(), worn, 'worn beats normal');
+  const tip = cellAt(p, SHIP.drillTip, 0);
+  p.kind[tip] = BLOCK.ROCK;
+  p.hp[tip] = p.maxHp[tip];
+  assert.equal(pick(), tip, 'the block at the drill tip beats the rest');
 });
 
 test('berserk refills on its own, slowly, and mead speeds it up', () => {
