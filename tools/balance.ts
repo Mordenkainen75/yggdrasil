@@ -1,9 +1,10 @@
-// Headless playthrough: a simple bot buys upgrades and passes on the saga, and we print how
-// long everything takes. Run with `npm run balance`. Game seconds, not real ones.
-import { SAGA, TICK } from '../src/game/config.ts';
-import { autoBuy, buyPerk, gloryPreview, chooseRune, computeStats, passSaga, openRuneOffer, perkCost } from '../src/game/economy.ts';
-import { step } from '../src/game/sim.ts';
+// Headless playthrough: a simple bot buys upgrades and passes on the saga, and we
+// print how long everything takes. Run with `npm run balance`. Game seconds, not real ones.
+import { BLOCK, REGION, TICK } from '../src/game/config.ts';
+import { autoBuy, buyPerk, chooseRune, computeStats, gloryPreview, openRuneOffer, passSaga, perkCost } from '../src/game/economy.ts';
+import { step, triggerBerserk } from '../src/game/sim.ts';
 import { SAGA_READY, newGame, type GameState } from '../src/game/state.ts';
+import { fmt } from '../src/ui/format.ts';
 
 const clock = (sec: number) => {
   const m = Math.floor(sec / 60);
@@ -19,11 +20,12 @@ function spendGlory(s: GameState): string {
     if (!id || !buyPerk(s, id)) break;
     bought.push(id);
   }
-  return `${bought.length} perks`;
+  return `${bought.length} sagas`;
 }
 
-const runs = Number(process.argv[2] ?? 4);
+const runs = Number(process.argv[2] ?? 3);
 const maxRunSeconds = Number(process.argv[3] ?? 3600);
+const stallSeconds = Number(process.argv[4] ?? 420); // pass on the saga once a region takes this long
 const s = newGame(12345);
 let totalSeconds = 0;
 
@@ -31,17 +33,17 @@ for (let run = 1; run <= runs; run++) {
   let runSeconds = 0;
   let regionStart = 0;
   let lastRegion = s.regionIndex;
-  let sagaReadyAt = -1;
   const line = (n: number, dur: number) => {
-    const st = computeStats(s);
     const u = s.upgrades;
+    const st = computeStats(s);
     console.log(
       `  region ${String(n + 1).padStart(2)} ${clock(dur).padStart(9)}   total ${clock(runSeconds).padStart(9)}` +
-      `   dmg ${st.drillDamage.toExponential(1)}  J${u.drill} G${u.smelter} M${u.forge} L${u.haulers} S${u.thunder} B${u.ravens}`,
+      `   silver/s ${fmt(s.rate).padStart(7)}  dmg ${fmt(st.drillDamage).padStart(6)}` +
+      `  Dr${u.drill} Rv${u.ravens} Sm${u.smelter} Fg${u.forge} Hl${u.haulers} Sw${u.sweep} Ln${u.lance} Th${u.thunder} Pu${u.pulse}`,
     );
   };
 
-  console.log(`\nRUN ${run}  (glory ${s.glory}, sagas ${s.sagas})`);
+  console.log(`\nRUN ${run}  (glory ${s.glory}, generations ${s.sagas})`);
   while (runSeconds < maxRunSeconds) {
     for (let i = 0; i < 30; i++) {
       step(s, TICK);
@@ -49,6 +51,7 @@ for (let run = 1; run <= runs; run++) {
     }
     runSeconds += 1;
     autoBuy(s);
+    triggerBerserk(s);
     while (s.runePicks > 0) {
       openRuneOffer(s);
       if (!s.runeOffer) break;
@@ -59,17 +62,18 @@ for (let run = 1; run <= runs; run++) {
       regionStart = runSeconds;
       lastRegion = s.regionIndex;
     }
-    if (sagaReadyAt < 0 && SAGA_READY(s)) sagaReadyAt = runSeconds;
-    // The bot passes on the saga once the current region is taking more than 3 minutes.
-    if (SAGA_READY(s) && gloryPreview(s) > 0 && runSeconds - regionStart > 180) break;
+    if (SAGA_READY(s) && gloryPreview(s) > 0 && runSeconds - regionStart > stallSeconds) break;
   }
   totalSeconds += runSeconds;
-  console.log(`  reached region ${s.regionIndex + 1} (saga unlocks at ${SAGA.unlockRegion + 1}, ready at ${sagaReadyAt < 0 ? 'never' : clock(sagaReadyAt)})`);
+  const p = s.region;
+  const left = Math.round((p.remaining / p.total) * 100);
+  const core = p.kind[p.core] === BLOCK.CORE ? Math.round((p.hp[p.core] / p.maxHp[p.core]) * 100) : 0;
+  console.log(`  stopped in region ${s.regionIndex + 1}: ${left}% of hexes left, Worldheart at ${core}%`);
   const gain = gloryPreview(s);
   if (!passSaga(s)) {
     console.log('  could not pass on the saga, stopping');
     break;
   }
-  console.log(`  SAGA at ${clock(runSeconds)}, +${gain} glory, spent: ${spendGlory(s)}, hoard ${s.perks.hoard} steel ${s.perks.steel}`);
+  console.log(`  PASSED at ${clock(runSeconds)}, +${gain} glory, bought ${spendGlory(s)}, hoard ${s.perks.hoard} steel ${s.perks.steel}`);
 }
-console.log(`\nTotal game time: ${clock(totalSeconds)}`);
+console.log(`\nTotal game time: ${clock(totalSeconds)}  (goal: Midgard in about 2 hours over 3 generations, ${REGION.baseRadius}-ring start)`);

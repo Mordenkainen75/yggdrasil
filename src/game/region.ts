@@ -17,6 +17,7 @@ export interface Region {
   wx: Float32Array;
   wy: Float32Array;
   depth: Float32Array; // 1 at the surface, 0 at the core
+  seen: Uint8Array; // 1 once revealed; everything else is under fog
   cells: Int32Array; // grid indices of every cell that started solid
   total: number;
   remaining: number;
@@ -38,7 +39,12 @@ function regionName(rng: Rng): string {
 const idx = (p: { radius: number; size: number }, q: number, r: number) => q + p.radius + (r + p.radius) * p.size;
 
 export function regionRadius(index: number): number {
-  return Math.min(REGION.maxRadius, REGION.baseRadius + Math.floor(index / REGION.radiusEvery));
+  return Math.min(REGION.maxRadius, REGION.baseRadius + index * REGION.radiusPerRegion);
+}
+
+/** Each region's map comes from the generation's seed, so a reload rebuilds the same one. */
+export function regionSeed(seed: number, index: number): number {
+  return (seed + index * 104729) | 0;
 }
 
 export function regionHpScale(index: number): number {
@@ -69,6 +75,7 @@ export function makeRegion(index: number, seed: number): Region {
     wx: new Float32Array(n),
     wy: new Float32Array(n),
     depth: new Float32Array(n),
+    seen: new Uint8Array(n),
     cells: new Int32Array(0),
     total: 0,
     remaining: 0,
@@ -97,11 +104,12 @@ export function makeRegion(index: number, seed: number): Region {
   }
 
   // Veins of gold wander through the rock.
-  const veins = REGION.goldVeins + Math.floor(radius * REGION.goldVeinsPerRing);
+  const veins = Math.round(cells.length / REGION.hexesPerGoldVein);
+  const [minSteps, maxSteps] = REGION.goldVeinSteps;
   for (let v = 0; v < veins; v++) {
     let q = Math.floor(rng() * size) - radius;
     let r = Math.floor(rng() * size) - radius;
-    const steps = 3 + Math.floor(rng() * 5);
+    const steps = minSteps + Math.floor(rng() * (maxSteps - minSteps + 1));
     for (let s = 0; s < steps; s++) {
       if (hexDistance(q, r) <= radius) {
         const i = idx(p, q, r);

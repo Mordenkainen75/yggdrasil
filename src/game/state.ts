@@ -1,24 +1,45 @@
-import { SAGA, RUNES, OFFLINE, PERKS, UPGRADES, SHIP, type RuneId, type PerkId, type UpgradeId } from './config.ts';
+import { OFFLINE, PERKS, RUNES, SAGA, SHIP, UPGRADES, type PerkId, type RuneId, type UpgradeId } from './config.ts';
 import { makeRegion, type Region } from './region.ts';
 
 export type GameEvent =
-  | { t: 'hit'; cell: number }
+  | { t: 'hit'; cell: number; drill: boolean }
   | { t: 'mine'; x: number; y: number; kind: number; value: number; hue: number }
   | { t: 'burst'; x: number; y: number }
   | { t: 'bolt'; x0: number; y0: number; x1: number; y1: number }
+  | { t: 'lance'; x0: number; y0: number; x1: number; y1: number }
+  | { t: 'swing'; x: number; y: number; angle: number }
+  | { t: 'pulse'; x: number; y: number }
   | { t: 'core'; x: number; y: number; bonus: number }
+  | { t: 'wave'; progress: number }
   | { t: 'region'; name: string; index: number }
+  | { t: 'rank'; id: UpgradeId; rank: number }
+  | { t: 'reveal'; cell: number }
+  | { t: 'find'; x: number; y: number }
   | { t: 'berserk' }
   | { t: 'waypoint'; x: number; y: number };
 
 export interface Raven {
   x: number;
   y: number;
-  target: number;
-  cooldown: number;
+  state: 'rest' | 'out' | 'back';
+  wait: number;
+  tx: number;
+  ty: number;
+  path: Set<number>; // hexes it has seen and not yet reported
+  lastCell: number;
 }
 
-const TRAIL_SAMPLES = 520; // enough for the longest possible convoy
+/** The collapse in progress: leftover hexes, nearest the Worldheart first. */
+export interface Sweep {
+  order: number[];
+  next: number;
+  elapsed: number;
+  tick: number;
+  pay: number;
+  maxDist: number;
+}
+
+const TRAIL_SAMPLES = 64; // enough for the longest possible convoy
 
 export interface Ship {
   x: number;
@@ -28,8 +49,12 @@ export interface Ship {
   retarget: number;
   drillTimer: number;
   grindTimer: number;
+  sweepTimer: number;
+  lanceTimer: number;
   thunderTimer: number;
+  pulseTimer: number;
   drilling: boolean;
+  lampCell: number;
   trail: Float32Array; // ring buffer of x,y pairs
   trailHead: number;
   sinceSample: number;
@@ -48,6 +73,7 @@ export interface GameState {
   bestRegion: number;
   regionsMined: number;
   upgrades: Record<UpgradeId, number>;
+  firstChoice: Record<string, UpgradeId>; // which of each pair was bought first
   perks: Record<PerkId, number>;
   runes: Record<RuneId, number>;
   runePicks: number; // choices earned and waiting; they never expire
@@ -55,6 +81,8 @@ export interface GameState {
   region: Region;
   ship: Ship;
   ravens: Raven[];
+  reveal: number[]; // reported hexes still appearing
+  sweep: Sweep | null;
   berserkCharge: number;
   berserkLeft: number;
   phase: 'mining' | 'collapse';
@@ -70,6 +98,11 @@ export interface GameState {
 
 export function zeroUpgrades(): Record<UpgradeId, number> {
   return Object.fromEntries(UPGRADES.map((u) => [u.id, 0])) as Record<UpgradeId, number>;
+}
+
+/** Every generation starts with a working drill and nothing else. */
+export function startUpgrades(): Record<UpgradeId, number> {
+  return { ...zeroUpgrades(), drill: 1 };
 }
 
 export function zeroPerks(): Record<PerkId, number> {
@@ -88,9 +121,13 @@ export function makeShip(): Ship {
     target: -1,
     retarget: 0,
     drillTimer: 0,
-    grindTimer: SHIP.grindEvery,
+    grindTimer: 1,
+    sweepTimer: 0,
+    lanceTimer: 0,
     thunderTimer: 2,
+    pulseTimer: 2,
     drilling: false,
+    lampCell: -1,
     trail: new Float32Array(TRAIL_SAMPLES * 2),
     trailHead: 0,
     sinceSample: 0,
@@ -100,13 +137,14 @@ export function makeShip(): Ship {
 /** Puts the ship in space beside the region with its haulers trailing straight behind it. */
 export function placeShip(w: Ship, p: Region, seed: number): void {
   const a = ((seed * 2654435761) >>> 0) / 4294967296 * Math.PI * 2;
-  const dist = p.worldRadius + 70;
+  const dist = p.worldRadius + 40;
   w.x = Math.cos(a) * dist;
   w.y = Math.sin(a) * dist;
   w.angle = a + Math.PI;
   w.target = -1;
   w.retarget = 0;
   w.drilling = false;
+  w.lampCell = -1;
   resetTrail(w);
 }
 
@@ -152,7 +190,8 @@ export function newGame(seed = (Math.random() * 2 ** 31) | 0): GameState {
     runBestRegion: 0,
     bestRegion: 0,
     regionsMined: 0,
-    upgrades: zeroUpgrades(),
+    upgrades: startUpgrades(),
+    firstChoice: {},
     perks: zeroPerks(),
     runes: zeroRunes(),
     runePicks: 0,
@@ -160,6 +199,8 @@ export function newGame(seed = (Math.random() * 2 ** 31) | 0): GameState {
     region,
     ship,
     ravens: [],
+    reveal: [],
+    sweep: null,
     berserkCharge: 0,
     berserkLeft: 0,
     phase: 'mining',

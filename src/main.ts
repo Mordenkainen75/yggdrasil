@@ -41,7 +41,14 @@ const ui = new Ui(state, {
 renderer.onEvent = (e) => {
   if (e.t === 'mine' && e.kind !== 0) {
     if (e.kind === BLOCK.GOLD) sound.gold();
-    else sound.crunch();
+    else sound.pop();
+  } else if (e.t === 'hit') {
+    if (e.drill) sound.tick();
+  } else if (e.t === 'wave') {
+    sound.wave(e.progress);
+  } else if (e.t === 'rank') {
+    sound.rank();
+    navigator.vibrate?.(30);
   } else if (e.t === 'burst') {
     sound.blast();
   } else if (e.t === 'core') {

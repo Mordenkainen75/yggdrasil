@@ -1,5 +1,5 @@
-import { BLOCK, HEX_SIZE, SHIP } from '../game/config.ts';
-import { computeStats } from '../game/economy.ts';
+import { BLOCK, HEX_SIZE, RANKS, SHIP } from '../game/config.ts';
+import { computeStats, upgradeDef } from '../game/economy.ts';
 import { segmentPos, type GameEvent, type GameState } from '../game/state.ts';
 import { fmt } from '../ui/format.ts';
 
@@ -36,6 +36,14 @@ interface Pop {
   color: string;
 }
 
+interface Beam {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  life: number;
+}
+
 interface Bolt {
   x0: number;
   y0: number;
@@ -52,6 +60,7 @@ const BERSERK = '#ff6a3c';
 const ICE = '#9fe8ff';
 const THUNDER = '#9fdcff';
 const STEEL = '#b9d6f2';
+const HEAT = ['rgba(255,190,90,0.12)', 'rgba(255,170,70,0.24)', 'rgba(255,140,50,0.38)', 'rgba(255,110,40,0.55)'];
 
 const MAX_PARTICLES = 1100;
 const HEX_INSET = 0.88;
@@ -87,6 +96,7 @@ export class Renderer {
   private rings: Ring[] = [];
   private pops: Pop[] = [];
   private bolts: Bolt[] = [];
+  private beams: Beam[] = [];
   private hits = new Map<number, number>();
   private stars: { x: number; y: number; depth: number; size: number }[] = [];
   private title: { name: string; sub: string; left: number } | null = null;
@@ -165,18 +175,48 @@ export class Renderer {
       this.onEvent(e);
       switch (e.t) {
         case 'hit':
-          this.hits.set(e.cell, 0.12);
+          this.hits.set(e.cell, 0.1);
+          if (e.drill) this.shards(s.region.wx[e.cell], s.region.wy[e.cell], FORGE, 1, 70, 0.3);
+          break;
+        case 'reveal':
+          this.hits.set(e.cell, 0.25);
+          break;
+        case 'find':
+          this.ring(e.x, e.y, 3, 60, 0.6, ICE, 2);
+          this.pops.push({ x: e.x, y: e.y, text: 'FOUND', life: 1.2, color: ICE });
+          break;
+        case 'lance':
+          this.beams.push({ x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, life: 0.22 });
+          break;
+        case 'swing':
+          this.shards(e.x + Math.cos(e.angle) * 9, e.y + Math.sin(e.angle) * 9, STEEL, 4, 90, 0.25);
+          break;
+        case 'pulse':
+          this.ring(e.x, e.y, 4, 120, 0.4, ICE, 3);
+          this.ring(e.x, e.y, 2, 70, 0.3, '#ffffff', 2);
+          this.addShake(2);
+          break;
+        case 'rank': {
+          const rank = RANKS[Math.min(RANKS.length - 1, e.rank)];
+          this.showTitle(upgradeDef(e.id).name, `${rank.name} rank`);
+          this.ring(s.ship.x, s.ship.y, 6, 150, 0.7, rank.color, 3);
+          this.flash = 0.25;
+          this.flashColor = '255,255,255';
+          break;
+        }
+        case 'wave':
           break;
         case 'mine': {
           if (e.kind === 0) {
             this.shards(e.x, e.y, `hsl(${e.hue} 22% 62%)`, 1, 150, 1.6);
             break;
           }
-          const color = e.kind === BLOCK.GOLD ? GOLD : e.kind === BLOCK.MEAD ? MEAD : e.kind === BLOCK.GAS ? GAS : `hsl(${e.hue} 22% 70%)`;
+          const color = e.kind === BLOCK.GOLD ? GOLD : e.kind === BLOCK.MEAD ? MEAD : e.kind === BLOCK.GAS ? GAS : e.kind === BLOCK.FIND ? ICE : `hsl(${e.hue} 22% 70%)`;
           this.shards(e.x, e.y, color, e.kind === BLOCK.ROCK ? 3 : 7, 60);
+          this.ring(e.x, e.y, 2, 34, 0.2, color, 1);
           this.spawn({ x: e.x, y: e.y, color: '#dfe9f2', home: true, size: 2, maxLife: 0.8, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60 });
-          if (e.kind === BLOCK.GOLD) {
-            this.pops.push({ x: e.x, y: e.y, text: `+${fmt(e.value)}`, life: 1, color: GOLD });
+          if (e.kind === BLOCK.GOLD || e.kind === BLOCK.FIND) {
+            this.pops.push({ x: e.x, y: e.y, text: `+${fmt(e.value)}`, life: 1, color: e.kind === BLOCK.FIND ? ICE : GOLD });
             this.ring(e.x, e.y, 4, 60, 0.4, GOLD);
           } else if (e.kind === BLOCK.MEAD) {
             this.ring(e.x, e.y, 4, 110, 0.5, MEAD);
@@ -326,6 +366,9 @@ export class Renderer {
     const mead = new Path2D();
     const gas = new Path2D();
     const flashes = new Path2D();
+    const fog = new Path2D();
+    const finds = new Path2D();
+    const heat = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
     const beat = 0.5 + 0.5 * Math.sin(this.time * 4);
 
     for (const i of p.cells) {
@@ -334,6 +377,10 @@ export class Renderer {
       const x = p.wx[i];
       const y = p.wy[i];
       if (Math.abs(x - this.camX) > viewW || Math.abs(y - this.camY) > viewH) continue;
+      if (p.seen[i] === 0) {
+        hexPath(fog, x, y, size);
+        continue;
+      }
 
       if (kind === BLOCK.ROCK) hexPath(rock[Math.min(2, Math.floor(p.depth[i] * 3))], x, y, size);
       else if (kind === BLOCK.GOLD) {
@@ -344,6 +391,19 @@ export class Renderer {
         gold.lineTo(x, y + size * 0.44);
         gold.lineTo(x - size * 0.38, y);
         gold.closePath();
+      } else if (kind === BLOCK.FIND) {
+        // A four-pointed gem.
+        const r = size * 0.62;
+        hexPath(finds, x, y, size);
+        finds.moveTo(x, y - r);
+        finds.lineTo(x + r * 0.28, y - r * 0.28);
+        finds.lineTo(x + r, y);
+        finds.lineTo(x + r * 0.28, y + r * 0.28);
+        finds.lineTo(x, y + r);
+        finds.lineTo(x - r * 0.28, y + r * 0.28);
+        finds.lineTo(x - r, y);
+        finds.lineTo(x - r * 0.28, y - r * 0.28);
+        finds.closePath();
       } else if (kind === BLOCK.MEAD) {
         // A banded cask that swells very slightly.
         const r = size * (0.42 + 0.03 * beat);
@@ -367,11 +427,11 @@ export class Renderer {
       }
 
       const health = p.hp[i] / p.maxHp[i];
-      if (kind !== BLOCK.CORE && health < 0.7) {
-        const seed = (i * 7) % 6;
-        const count = health < 0.35 ? 3 : 1;
-        for (let c = 0; c < count; c++) {
-          const corner = CORNERS[(seed + c * 2) % 6];
+      if (kind !== BLOCK.CORE && health < 1) {
+        // The hex heats up in steps as it's worked, so progress is always visible.
+        hexPath(heat[Math.min(3, Math.floor((1 - health) * 4))], x, y, size);
+        if (health < 0.5) {
+          const corner = CORNERS[(i * 7) % 6];
           cracks.moveTo(x + corner[0] * size, y + corner[1] * size);
           cracks.lineTo(x + corner[1] * size * 0.2, y - corner[0] * size * 0.2);
         }
@@ -401,6 +461,18 @@ export class Renderer {
     ctx.strokeStyle = GAS;
     ctx.fill(gas);
     ctx.stroke(gas);
+    ctx.fillStyle = 'rgba(159,232,255,0.2)';
+    ctx.strokeStyle = ICE;
+    ctx.fill(finds);
+    ctx.stroke(finds);
+    ctx.fillStyle = `hsl(${hue} 12% 8%)`;
+    ctx.strokeStyle = `hsla(${hue},14%,34%,0.4)`;
+    ctx.fill(fog);
+    ctx.stroke(fog);
+    HEAT.forEach((color, step) => {
+      ctx.fillStyle = color;
+      ctx.fill(heat[step]);
+    });
     ctx.strokeStyle = 'rgba(7,10,16,0.85)';
     ctx.lineWidth = line * 1.2;
     ctx.stroke(cracks);
@@ -412,7 +484,7 @@ export class Renderer {
       else this.hits.set(cell, left - dt);
     }
 
-    if (p.kind[p.core] === BLOCK.CORE) {
+    if (p.kind[p.core] === BLOCK.CORE && p.seen[p.core] === 1) {
       const x = p.wx[p.core];
       const y = p.wy[p.core];
       const health = p.hp[p.core] / p.maxHp[p.core];
@@ -478,6 +550,7 @@ export class Renderer {
     ctx.lineCap = 'round';
     ctx.beginPath();
     s.ravens.forEach((b, i) => {
+      if (b.state === 'rest') return;
       // Two wings, flapping out of step with each other.
       const flap = Math.sin(this.time * 14 + i * 1.7) * 2.2;
       ctx.moveTo(b.x - 5, b.y - flap);
@@ -491,7 +564,7 @@ export class Renderer {
     const { ctx } = this;
     const w = s.ship;
     const st = computeStats(s);
-    const n = st.segments;
+    const n = st.pods;
     const pos = { x: 0, y: 0 };
     const xs = new Float32Array(n + 1);
     const ys = new Float32Array(n + 1);
@@ -518,7 +591,7 @@ export class Renderer {
       const len = Math.hypot(dx, dy) || 1;
       const ux = dx / len;
       const uy = dy / len;
-      const hl = 3.3;
+      const hl = 2.2;
       const hw = SHIP.haulerRadius * 0.74 * (1 - (i / (n + 1)) ** 2 * 0.3);
       const fx = xs[i] + ux * hl;
       const fy = ys[i] + uy * hl;
@@ -530,12 +603,12 @@ export class Renderer {
       pods.lineTo(rx - uy * hw, ry + ux * hw);
       pods.closePath();
       links.moveTo(fx, fy);
-      links.lineTo(xs[i - 1] - ux * (i === 1 ? 10 : hl), ys[i - 1] - uy * (i === 1 ? 10 : hl));
+      links.lineTo(xs[i - 1] - ux * (i === 1 ? 7 : hl), ys[i - 1] - uy * (i === 1 ? 7 : hl));
       for (const side of [-1, 1]) {
         const sx = xs[i] - uy * side * (hw + 0.4);
         const sy = ys[i] + ux * side * (hw + 0.4);
-        shields.moveTo(sx + 1.5, sy);
-        shields.arc(sx, sy, 1.5, 0, 6.3);
+        shields.moveTo(sx + 1, sy);
+        shields.arc(sx, sy, 1, 0, 6.3);
       }
     }
 
@@ -563,6 +636,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(w.x, w.y);
     ctx.rotate(w.angle);
+    ctx.scale(SHIP.drawScale, SHIP.drawScale);
     ctx.lineJoin = 'round';
 
     // Drill cone, with bands that run towards the tip as it turns.
@@ -690,6 +764,21 @@ export class Renderer {
       ctx.lineWidth = r.width / this.zoom;
       ctx.beginPath();
       ctx.arc(r.x, r.y, r.r, 0, 6.3);
+      ctx.stroke();
+    }
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      const b = this.beams[i];
+      b.life -= dt;
+      if (b.life <= 0) {
+        this.beams.splice(i, 1);
+        continue;
+      }
+      ctx.globalAlpha = Math.min(1, b.life * 6);
+      ctx.strokeStyle = ICE;
+      ctx.lineWidth = 2.4 / this.zoom;
+      ctx.beginPath();
+      ctx.moveTo(b.x0, b.y0);
+      ctx.lineTo(b.x1, b.y1);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;

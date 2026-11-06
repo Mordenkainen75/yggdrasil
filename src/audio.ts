@@ -3,6 +3,7 @@ export class Sound {
   private ctx: AudioContext | null = null;
   private noise: AudioBuffer | null = null;
   private lastCrunch = 0;
+  private lastTick = 0;
   muted = false;
 
   /** Browsers only allow audio after a user gesture, so this runs on first touch. */
@@ -56,11 +57,33 @@ export class Sound {
     osc.stop(now + seconds);
   }
 
-  crunch(): void {
+  /** One drill hit: a tiny tick, so slow blocks still feel like work. */
+  tick(): void {
     const now = performance.now();
-    if (now - this.lastCrunch < 70) return;
+    if (now - this.lastTick < 60) return;
+    this.lastTick = now;
+    this.burst(1800 + Math.random() * 700, 0.03, 0.025);
+  }
+
+  /** A block breaking: short and rounded, like popping bubble wrap. */
+  pop(): void {
+    const now = performance.now();
+    if (now - this.lastCrunch < 50) return;
     this.lastCrunch = now;
-    this.burst(900 + Math.random() * 900, 0.07, 0.07);
+    const pitch = 520 + Math.random() * 300;
+    this.tone(pitch, pitch * 0.45, 0.07, 0.09, 'sine');
+    this.burst(1100, 0.04, 0.05);
+  }
+
+  /** The collapse ring passing outward; pitch climbs as it spreads. */
+  wave(progress: number): void {
+    const pitch = 220 * 2 ** (progress * 2);
+    this.tone(pitch, pitch * 0.7, 0.1, 0.07, 'triangle');
+  }
+
+  rank(): void {
+    this.tone(330, 660, 0.25, 0.1, 'triangle');
+    this.tone(495, 990, 0.35, 0.08, 'triangle');
   }
 
   gold(): void {

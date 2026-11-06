@@ -34,7 +34,7 @@ The fun has to come from steady progress, satisfying effects, and real choices.
 3. Drill out the region's **Worldheart** to collapse it. Leftovers pay out at 50%.
 4. Carve 1 of 3 **runes**, kept until the saga passes on.
 5. Tougher regions slow you down until the wall makes a new generation worthwhile.
-6. **Pass on the saga** (unlocks on region 6): the next generation restarts at
+6. **Pass on the saga** (unlocks on region 5): the next generation restarts at
    region 1 and keeps **glory**, spent on permanent **sagas**.
 
 ## Blocks
@@ -53,14 +53,6 @@ Runes are where the choices live. Many carry a real cost, and they push towards
 a build: Blast, Grind, Thunder, Ravens, Harvest, Berserk or Drill. A worthwhile
 test for any new rune: is there a player who would turn it down?
 
-## Pacing targets
-
-Checked with `npm run balance`, a bot that plays in fast-forward.
-
-- Region 1 takes about 45 seconds.
-- First run hits a soft wall around regions 10 to 12, after 10 to 20 minutes.
-- Each generation gets you back there faster, and a little further.
-
 ## The planned arc (not built yet)
 
 Only Midgard exists today, and it has no end. The agreed direction is below, to
@@ -72,8 +64,9 @@ be built one realm at a time. None of it is final.
    tech arrives in Svartalfheim.
 4. **The twist:** Naglfar, the ship of the dead, sails against the gods at
    Ragnarök. The clan's climb out of Hel turns out to be how Ragnarök begins.
-5. **The ending:** Ragnarök is the finale. Credits roll, and the reborn world can
-   be an optional replay.
+5. **The ending:** Ragnarök is the finale. Credits roll, and the reborn world
+   opens as New Game+, with bigger numbers. Later expansions could add twists to
+   it.
 
 Design rules for that arc:
 
@@ -81,6 +74,155 @@ Design rules for that arc:
   the saga restarts the current realm. Finishing a realm is permanent.
 - Aim for about nine regions per realm, not 50 or 100. A hundred regions of the
   same thing is filler.
+
+## Progression plan (partly built)
+
+Every number here is a starting point, to be tuned with `npm run balance` and
+real play.
+
+**Built:** tools, ranks, staged unlocks and hidden baselines; smaller hexes and
+damage colors; fog, recon ravens and rare finds; Worldheart pay and the collapse
+sweep; square-root Glory; weaker runes.
+
+**Not built yet:** the stone map and tunnel, cargo and junk, Clean Sweep, the
+treasure chest, the realm ending, and new ranks past Midgard's three. Gold, mead
+and gas placement also hasn't been tuned for the bigger regions by hand.
+
+**First bot pacing:** generation 1 stalls in region 5 at about 41 minutes,
+generation 2 in region 7 at about 30, and generation 3 in region 8 at about 19.
+That's about 90 minutes so far, which suits the 2-hour goal. The bot buys the
+cheapest upgrade, so a thoughtful player should beat it.
+
+What matters most: satisfying clearing, like popping bubble wrap. Numbers exist
+to serve that feeling.
+
+### Pacing
+
+- Midgard: about 2 hours of play over 3 generations. The pattern is established
+  in an evening or two.
+- Each later realm runs about 1.4x longer, for roughly 100 hours in total.
+- The ship is always visibly doing something. Early blocks can take up to 5
+  seconds, because every hit shows as sparks, a tick of sound and a color step.
+  What slows down is regions and ranks, never the feedback on screen.
+
+### Map
+
+- Hexes shrink from size 10 to about 6, fitting nearly 3x as many on screen.
+- Each realm has 9 regions: region 1 has about 800 mineable hexes, region 9 about
+  3,000.
+- Regions are bigger still in stone, which costs no time: the convoy enters by
+  tunnel into deposits set in a large field of worthless rock.
+- Mining speed starts at about 5 seconds per hex, reaches about 1 per second
+  during region 1, and hits 10 or more per second by the end of the realm.
+  Multi-hex tools carry that growth.
+- Hexes render in a few damage steps, shifting color as they weaken.
+- Early phone test needed: this many hexes is the main performance risk.
+
+### Clearing
+
+- The Worldheart no longer deletes what's left. Its destruction starts a collapse
+  that pops the remaining hexes in rings outward, with rising pitch, over a few
+  seconds.
+- Clearing a whole region by hand earns a Clean Sweep bonus.
+- The Worldheart pays as it's mined: 0.5% of its value per 1% of its health, up
+  to 49% just before it falls, with the rest paid at collapse.
+- Blocks never respawn, so each region's total value is predictable, apart from
+  upgrades, finds and boons. If the Worldheart is too slow, that's the signal to
+  pass on the saga. Its health is finite, so waiting also works.
+- Away silver is a bonus on top of the map's value, not taken from it, and it's
+  based on recent income, so a slow trickle at the Worldheart pays little.
+
+### Tools and clan upgrades
+
+Two groups, each with a line-art icon.
+
+- **Tools** deal damage, each with its own hex pattern:
+  - Drillhead: the hex in front
+  - Sweep Arms: an arc of 3 in front
+  - Hauler Cutters: hexes beside the pods
+  - Gungnir Lance: a straight line, piercing
+  - Thunder Charges: a slow strike on a distant cluster
+  - Mjölnir Pulse: a ring around the ship
+- **Clan upgrades** do everything else: Smelter, Forge Heat, Cargo Hold, Return
+  Speed and Ravens.
+
+Unlocking:
+
+- You start with Drillhead and Ravens. Each later upgrade opens when an earlier
+  one reaches a set tier, usually as a choice of which comes first.
+- Every tool starts at a displayed level 1, but with a higher hidden baseline in
+  both power and price, about 4x the power of the one before. A new tool is
+  useful the moment you buy it.
+
+Ranks:
+
+- Each upgrade runs 1/25 to 25/25, then ranks up and starts again.
+- Each realm adds about 3 new ranks in its own material, with its own color,
+  capped until you reach that realm. That gives about 27 ranks by Asgard, ending
+  in Godforged. Midgard's are Iron, Steel and Silver.
+- Upgrades and ranks reset when the saga passes on, so the cap can't be outrun.
+- A level adds about 2%. Levels cost about 8% more each, and a rank-up step costs
+  more again.
+- A rank-up gives x2 or a unique perk, a new icon color, and a moment on screen.
+
+### Ravens
+
+- Two only: Huginn and Muninn. They deal no damage.
+- The map starts under fog, apart from a small area around the ship. Ravens fly
+  out, return, and reveal the hexes they passed through.
+- Recon is slow: a flight can take a minute or more, and it's meant to feel like
+  an expedition.
+- The ship only targets what it can see, so scouting finds gold, mead and the
+  Worldheart. Mining also reveals a small ring around the ship, so it can never
+  run out of targets while waiting for a raven.
+- Upgrades add range, width and flight rate.
+- Rare ore exists only if found: a raven's scouting can turn a hex into a rare
+  find, and that same hex mined undiscovered pays as a normal block. Prospecting
+  upgrades therefore raise real income.
+
+### Haulers and cargo
+
+- One pod per Haulers rank, capped at 9. Pods carry first and cut second.
+- Cargo is measured in tons, not silver, so capacity keeps its meaning as values
+  grow.
+- Silver is banked when cargo gets home. A full pod leaves, takes about 10 seconds
+  round trip, then rejoins.
+- If every pod is away, the ship waits. Cargo Hold and Return Speed ease this.
+
+### Junk
+
+- Automation never damages stone: not the ship, not pods, not any tool.
+- Only a player steering the ship into stone makes junk, which fills pods and pays
+  nothing. Later upgrades can reject it.
+- Ravens can spot rich finds out in the stone that only steering can reach. This
+  is an active-play reward.
+
+### Glory
+
+- Glory comes from a square root of the silver earned this generation, so idling
+  counts.
+- Region 9 is a soft wall. Without sagas it takes far too long, and about 3
+  generations make it comfortable. Nothing is locked.
+
+### Treasure chest
+
+- A chest drifts in every few minutes of play, and tapping it gives a random boon:
+  silver, full mead, pods home at once, a fog patch revealed, or a short boost.
+- It never expires and only one can be waiting, so idle play loses nothing.
+- Every result is good. No near-miss animations or fake rarity.
+
+### Runes
+
+- Power drops to about x1.3 to x1.5, since current values are a main cause of
+  runaway speed.
+- Ansuz can't boost raven damage any more. It becomes a scouting rune.
+- Costs stay real: a rune should still be something a player might turn down.
+
+### Build order
+
+1. Tools, ranks, unlocks, numbers and Glory.
+2. Smaller hexes, stone map, tunnel, fog and ravens, with a phone test.
+3. Cargo, junk, collapse sweep and chests.
 
 ## Ideas parked for later
 

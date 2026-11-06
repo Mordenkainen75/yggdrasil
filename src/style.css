@@ -69,6 +69,12 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
 .row { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 10px; min-height: 56px; border: 1px solid var(--line); margin-bottom: 6px; background: var(--panel-2); }
 .row:disabled { cursor: default; }
+.row[hidden] { display: none; }
+.row.upgrade { --rank: var(--line); }
+.row.choice { border-style: dashed; }
+.upgrade-icon { flex: none; width: 34px; height: 34px; padding: 4px; border: 1px solid var(--rank); fill: none; stroke: var(--rank); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rank-bar { display: block; height: 3px; margin-top: 5px; background: var(--line); }
+.rank-bar > i { display: block; height: 100%; width: 0; background: var(--rank); }
 .row.buyable { border-color: var(--forge); }
 .row.perk.buyable { border-color: var(--glory); }
 .row.locked { opacity: 0.45; }
