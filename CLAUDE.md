@@ -14,11 +14,13 @@ is a hard requirement for every feature.
 
 ## Publishing
 
-- Not published yet. The plan is GitHub Pages under `Mordenkainen75`, with the
-  repo name chosen once the title is settled.
+- Live at https://mordenkainen75.github.io/yggdrasil/, from the public repo
+  `Mordenkainen75/yggdrasil`. Renaming the repo later changes that address, so
+  the phone would need the game reinstalled.
 - This is Daniel's personal project: it belongs to the GitHub account
   `Mordenkainen75`, not the work account `DriveraECSD`, which stays the default
-  on this laptop. Never publish this repo from the work account.
+  on this laptop. Never publish this repo from the work account. This repo's local
+  git config makes pushes use the personal account's token whichever is active.
 - Pushing to `main` runs `.github/workflows/deploy.yml`, which tests, builds and
   publishes to GitHub Pages. Local edits don't reach the phone until pushed.
 - An installed game shows an update on the launch after it downloads it, so a
