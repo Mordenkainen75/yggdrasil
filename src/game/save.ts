@@ -1,62 +1,62 @@
 import { SAVE_KEY } from './config.ts';
-import { makePlanet } from './planet.ts';
-import { makeWorm, newGame, placeWorm, resetTrail, zeroMutations, zeroPerks, zeroUpgrades, type GameState } from './state.ts';
-import type { MutationId } from './config.ts';
+import { makeRegion } from './region.ts';
+import { makeShip, newGame, placeShip, resetTrail, zeroRunes, zeroPerks, zeroUpgrades, type GameState } from './state.ts';
+import type { RuneId } from './config.ts';
 
 interface SaveFile {
   v: 1;
   seed: number;
   time: number;
-  biomass: number;
-  runBiomass: number;
-  lifetimeBiomass: number;
-  chitin: number;
-  molts: number;
-  planetIndex: number;
-  runBestPlanet: number;
-  bestPlanet: number;
-  planetsEaten: number;
+  silver: number;
+  runSilver: number;
+  lifetimeSilver: number;
+  glory: number;
+  sagas: number;
+  regionIndex: number;
+  runBestRegion: number;
+  bestRegion: number;
+  regionsMined: number;
   upgrades: Record<string, number>;
   perks: Record<string, number>;
-  mutations: Record<string, number>;
-  mutationPicks: number;
-  mutationOffer: MutationId[] | null;
-  planetSeed: number;
+  runes: Record<string, number>;
+  runePicks: number;
+  runeOffer: RuneId[] | null;
+  regionSeed: number;
   kind: number[]; // sparse: only cells that started solid, in p.cells order
   hp: number[];
-  frenzyCharge: number;
+  berserkCharge: number;
   rate: number;
-  worm: { x: number; y: number; angle: number };
+  ship: { x: number; y: number; angle: number };
   lastSeen: number;
 }
 
 export function serialize(s: GameState, now: number): string {
-  const p = s.planet;
-  const inPlay = s.phase === 'eating';
+  const p = s.region;
+  const inPlay = s.phase === 'mining';
   const file: SaveFile = {
     v: 1,
     seed: s.seed,
     time: s.time,
-    biomass: s.biomass,
-    runBiomass: s.runBiomass,
-    lifetimeBiomass: s.lifetimeBiomass,
-    chitin: s.chitin,
-    molts: s.molts,
-    planetIndex: s.planetIndex,
-    runBestPlanet: s.runBestPlanet,
-    bestPlanet: s.bestPlanet,
-    planetsEaten: s.planetsEaten,
+    silver: s.silver,
+    runSilver: s.runSilver,
+    lifetimeSilver: s.lifetimeSilver,
+    glory: s.glory,
+    sagas: s.sagas,
+    regionIndex: s.regionIndex,
+    runBestRegion: s.runBestRegion,
+    bestRegion: s.bestRegion,
+    regionsMined: s.regionsMined,
     upgrades: s.upgrades,
     perks: s.perks,
-    mutations: s.mutations,
-    mutationPicks: s.mutationPicks,
-    mutationOffer: s.mutationOffer,
-    planetSeed: p.seed,
+    runes: s.runes,
+    runePicks: s.runePicks,
+    runeOffer: s.runeOffer,
+    regionSeed: p.seed,
     kind: inPlay ? Array.from(p.cells, (i) => p.kind[i]) : [],
     hp: inPlay ? Array.from(p.cells, (i) => Number(p.hp[i].toPrecision(5))) : [],
-    frenzyCharge: s.frenzyCharge,
+    berserkCharge: s.berserkCharge,
     rate: s.rate,
-    worm: { x: s.worm.x, y: s.worm.y, angle: s.worm.angle },
+    ship: { x: s.ship.x, y: s.ship.y, angle: s.ship.angle },
     lastSeen: now,
   };
   return JSON.stringify(file);
@@ -70,32 +70,32 @@ export function deserialize(text: string): GameState | null {
   } catch {
     return null;
   }
-  if (!f || f.v !== 1 || typeof f.seed !== 'number' || typeof f.planetSeed !== 'number') return null;
+  if (!f || f.v !== 1 || typeof f.seed !== 'number' || typeof f.regionSeed !== 'number') return null;
 
   const s = newGame(f.seed);
   s.time = f.time;
-  s.biomass = f.biomass;
-  s.runBiomass = f.runBiomass;
-  s.lifetimeBiomass = f.lifetimeBiomass;
-  s.chitin = f.chitin;
-  s.molts = f.molts;
-  s.planetIndex = f.planetIndex;
-  s.runBestPlanet = f.runBestPlanet;
-  s.bestPlanet = f.bestPlanet;
-  s.planetsEaten = f.planetsEaten;
+  s.silver = f.silver;
+  s.runSilver = f.runSilver;
+  s.lifetimeSilver = f.lifetimeSilver;
+  s.glory = f.glory;
+  s.sagas = f.sagas;
+  s.regionIndex = f.regionIndex;
+  s.runBestRegion = f.runBestRegion;
+  s.bestRegion = f.bestRegion;
+  s.regionsMined = f.regionsMined;
   // Spreading over zeroes means upgrades added in later versions start at 0.
   s.upgrades = { ...zeroUpgrades(), ...f.upgrades };
   s.perks = { ...zeroPerks(), ...f.perks };
-  s.mutations = { ...zeroMutations(), ...f.mutations };
-  s.mutationPicks = f.mutationPicks ?? 0;
-  s.mutationOffer = f.mutationOffer ?? null;
-  s.frenzyCharge = f.frenzyCharge;
+  s.runes = { ...zeroRunes(), ...f.runes };
+  s.runePicks = f.runePicks ?? 0;
+  s.runeOffer = f.runeOffer ?? null;
+  s.berserkCharge = f.berserkCharge;
   s.rate = f.rate;
   s.lastSeen = f.lastSeen;
 
-  const p = makePlanet(f.planetIndex, f.planetSeed);
-  s.planet = p;
-  s.worm = makeWorm();
+  const p = makeRegion(f.regionIndex, f.regionSeed);
+  s.region = p;
+  s.ship = makeShip();
   if (f.kind.length === p.cells.length) {
     p.remaining = 0;
     p.cells.forEach((cell, n) => {
@@ -103,12 +103,12 @@ export function deserialize(text: string): GameState | null {
       p.hp[cell] = f.hp[n];
       if (f.kind[n] !== 0) p.remaining += 1;
     });
-    s.worm.x = f.worm.x;
-    s.worm.y = f.worm.y;
-    s.worm.angle = f.worm.angle;
-    resetTrail(s.worm);
+    s.ship.x = f.ship.x;
+    s.ship.y = f.ship.y;
+    s.ship.angle = f.ship.angle;
+    resetTrail(s.ship);
   } else {
-    placeWorm(s.worm, p, f.planetSeed);
+    placeShip(s.ship, p, f.regionSeed);
   }
   return s;
 }

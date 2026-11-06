@@ -4,56 +4,56 @@
 export const TICK = 1 / 30; // simulation step, seconds
 export const HEX_SIZE = 10; // world units, centre to corner
 
-export const BLOCK = { EMPTY: 0, CRUST: 1, NECTAR: 2, PULSE: 3, BLISTER: 4, HEART: 5 } as const;
+export const BLOCK = { EMPTY: 0, ROCK: 1, GOLD: 2, MEAD: 3, GAS: 4, CORE: 5 } as const;
 export type BlockKind = (typeof BLOCK)[keyof typeof BLOCK];
 
-export const PLANET = {
+export const REGION = {
   baseRadius: 6,
-  radiusEvery: 2, // grow one ring every N planets
+  radiusEvery: 2, // grow one ring every N regions
   maxRadius: 13,
   hpBase: 3,
   hpGrowth: 1.78,
   valueBase: 1,
   valueGrowth: 1.42,
   depthBonus: 1.6, // core cells have (1 + bonus) times the hp and value of surface cells
-  nectarVeins: 3,
-  nectarVeinsPerRing: 0.5,
-  nectarValue: 7,
-  nectarHp: 1.5,
-  pulseChance: 0.035,
-  blisterChance: 0.05,
-  heartHpShare: 0.14, // heart hp, as a share of the whole planet's hp
-  heartValueShare: 0.3, // heart value, as a share of the whole planet's value
-  heartScentAt: 0.35, // worm goes for the heart once this share of cells remains
-  collapseValue: 0.5, // leftover cells pay this share when the planet dies
+  goldVeins: 3,
+  goldVeinsPerRing: 0.5,
+  goldValue: 7,
+  goldHp: 1.5,
+  meadChance: 0.035,
+  gasChance: 0.05,
+  coreHpShare: 0.14, // core hp, as a share of the whole region's hp
+  coreValueShare: 0.3, // core value, as a share of the whole region's value
+  coreSeekAt: 0.35, // ship heads for the core once this share of cells remains
+  collapseValue: 0.5, // leftover cells pay this share when the region dies
   collapseSeconds: 3.2,
 };
 
-export const WORM = {
+export const SHIP = {
   baseSpeed: 58,
   turnRate: 5.5, // radians per second
   lookAhead: 6,
   trailSampleDist: 3,
   samplesPerSegment: 3,
   baseSegments: 5,
-  biteRate: 3,
+  drillRate: 3,
   grindEvery: 0.5,
-  grindShare: 0.12, // share of jaw damage dealt by each body segment
-  bodyRadius: 6.5,
+  grindShare: 0.12, // share of drill damage dealt by each hauler
+  haulerRadius: 6.5,
 };
 
-export const FRENZY = {
+export const BERSERK = {
   seconds: 8,
-  biteMul: 2.2,
+  drillMul: 2.2,
   speedMul: 1.5,
-  chargePerPulse: 0.34,
+  chargePerMead: 0.34,
 };
 
-export const BLISTER = { rings: 2, hpShare: 0.3, jawShare: 3 };
-export const SPIT = { baseCooldown: 5, minCooldown: 0.8, cooldownMul: 0.97, range: 130 };
-export const BROOD = { speed: 75, biteEvery: 0.5, dmgShare: 0.4, maxCount: 30 };
+export const GAS = { rings: 2, hpShare: 0.3, drillShare: 3 };
+export const THUNDER = { baseCooldown: 5, minCooldown: 0.8, cooldownMul: 0.97, range: 130 };
+export const RAVENS = { speed: 75, strikeEvery: 0.5, dmgShare: 0.4, maxCount: 30 };
 
-export type UpgradeId = 'jaws' | 'metabolism' | 'length' | 'gut' | 'spit' | 'brood';
+export type UpgradeId = 'drill' | 'forge' | 'haulers' | 'smelter' | 'thunder' | 'ravens';
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -62,19 +62,19 @@ export interface UpgradeDef {
   baseCost: number;
   growth: number;
   maxLevel: number;
-  unlockPlanet: number; // zero-based planet index
+  unlockRegion: number; // zero-based region index
 }
 
 export const UPGRADES: UpgradeDef[] = [
-  { id: 'jaws', name: 'Jaws', blurb: 'Bite damage', baseCost: 6, growth: 1.2, maxLevel: 1000, unlockPlanet: 0 },
-  { id: 'gut', name: 'Gut', blurb: 'Biomass per block', baseCost: 9, growth: 1.21, maxLevel: 1000, unlockPlanet: 0 },
-  { id: 'metabolism', name: 'Metabolism', blurb: 'Bite rate and speed', baseCost: 12, growth: 1.24, maxLevel: 120, unlockPlanet: 0 },
-  { id: 'length', name: 'Length', blurb: 'Body segments grind the walls', baseCost: 18, growth: 1.2, maxLevel: 150, unlockPlanet: 0 },
-  { id: 'spit', name: 'Acid Spit', blurb: 'Splash damage at range', baseCost: 90, growth: 1.24, maxLevel: 200, unlockPlanet: 1 },
-  { id: 'brood', name: 'Brood', blurb: 'Hatchlings chew on their own', baseCost: 350, growth: 1.35, maxLevel: BROOD.maxCount, unlockPlanet: 2 },
+  { id: 'drill', name: 'Drillhead', blurb: 'Drill damage', baseCost: 6, growth: 1.2, maxLevel: 1000, unlockRegion: 0 },
+  { id: 'smelter', name: 'Smelter', blurb: 'Silver per block', baseCost: 9, growth: 1.21, maxLevel: 1000, unlockRegion: 0 },
+  { id: 'forge', name: 'Forge Heat', blurb: 'Drill rate and speed', baseCost: 12, growth: 1.24, maxLevel: 120, unlockRegion: 0 },
+  { id: 'haulers', name: 'Clan Haulers', blurb: 'Each hauler crew cuts the walls', baseCost: 18, growth: 1.2, maxLevel: 150, unlockRegion: 0 },
+  { id: 'thunder', name: 'Thunder Charges', blurb: 'Splash damage at range', baseCost: 90, growth: 1.24, maxLevel: 200, unlockRegion: 1 },
+  { id: 'ravens', name: 'Raven Drones', blurb: 'Drones mine on their own', baseCost: 350, growth: 1.35, maxLevel: RAVENS.maxCount, unlockRegion: 2 },
 ];
 
-export type PerkId = 'hide' | 'fangs' | 'yolk' | 'dreams' | 'instinct';
+export type PerkId = 'hoard' | 'steel' | 'stores' | 'hearth' | 'foreman';
 
 export interface PerkDef {
   id: PerkId;
@@ -86,47 +86,48 @@ export interface PerkDef {
 }
 
 export const PERKS: PerkDef[] = [
-  { id: 'hide', name: 'Rich Blood', blurb: '+30% biomass, each level', baseCost: 1, growth: 1.35, maxLevel: 200 },
-  { id: 'fangs', name: 'Ancient Fangs', blurb: '+30% damage, each level', baseCost: 1, growth: 1.35, maxLevel: 200 },
-  { id: 'yolk', name: 'Yolk Sac', blurb: 'Start each run with more biomass', baseCost: 2, growth: 1.6, maxLevel: 40 },
-  { id: 'dreams', name: 'Deep Dreams', blurb: 'Earn more, and longer, while away', baseCost: 3, growth: 1.7, maxLevel: 10 },
-  { id: 'instinct', name: 'Instinct', blurb: 'Buys upgrades and fires Frenzy for you', baseCost: 8, growth: 1, maxLevel: 1 },
+  { id: 'hoard', name: 'Hoard Lore', blurb: '+30% silver, each level', baseCost: 1, growth: 1.35, maxLevel: 200 },
+  { id: 'steel', name: "Ancestors' Steel", blurb: '+30% damage, each level', baseCost: 1, growth: 1.35, maxLevel: 200 },
+  { id: 'stores', name: 'Clan Stores', blurb: 'Start each generation with more silver', baseCost: 2, growth: 1.6, maxLevel: 40 },
+  { id: 'hearth', name: 'Hearthkeepers', blurb: 'Earn more, and longer, while away', baseCost: 3, growth: 1.7, maxLevel: 10 },
+  { id: 'foreman', name: 'Old Foreman', blurb: 'Buys upgrades and fires Berserk for you', baseCost: 8, growth: 1, maxLevel: 1 },
 ];
 
-export type MutationId =
-  | 'volatile' | 'serrated' | 'caustic' | 'hive' | 'sweet'
-  | 'gorger' | 'livewire' | 'heartseeker' | 'thorough' | 'ironjaw';
+export type RuneId =
+  | 'kenaz' | 'thurisaz' | 'hagalaz' | 'ansuz' | 'fehu'
+  | 'wunjo' | 'sowilo' | 'tiwaz' | 'jera' | 'uruz';
 
-export type BuildTag = 'Blast' | 'Grind' | 'Acid' | 'Swarm' | 'Harvest' | 'Frenzy' | 'Bite';
+export type BuildTag = 'Blast' | 'Grind' | 'Thunder' | 'Ravens' | 'Harvest' | 'Berserk' | 'Drill';
 
-export interface MutationDef {
-  id: MutationId;
-  name: string;
+export interface RuneDef {
+  id: RuneId;
+  name: string; // the real Elder Futhark rune
+  meaning: string;
   tag: BuildTag;
   gain: string;
   cost: string | null; // the tradeoff, if there is one
   maxLevel: number;
 }
 
-// One is chosen after every planet and lasts until the next molt. Most carry a
-// real cost, so a build is a set of decisions and not a list of free bonuses.
-export const MUTATIONS: MutationDef[] = [
-  { id: 'volatile', name: 'Volatile Blood', tag: 'Blast', gain: 'Blisters reach 1 ring farther and hit 50% harder', cost: 'Bite damage -15%', maxLevel: 3 },
-  { id: 'livewire', name: 'Live Wire', tag: 'Blast', gain: 'Pulse blocks burst like blisters and charge Frenzy twice as fast', cost: null, maxLevel: 2 },
-  { id: 'serrated', name: 'Serrated Hide', tag: 'Grind', gain: 'Body grinding x3', cost: 'Bite damage -30%', maxLevel: 3 },
-  { id: 'caustic', name: 'Caustic Glands', tag: 'Acid', gain: 'Spit fires 50% faster, with a wider splash', cost: 'Crawl speed -15%', maxLevel: 3 },
-  { id: 'hive', name: 'Hive Mother', tag: 'Swarm', gain: 'Hatchling damage x3', cost: 'Bite rate -25%', maxLevel: 3 },
-  { id: 'sweet', name: 'Sweet Tooth', tag: 'Harvest', gain: 'Nectar pays x3, and the worm hunts it hard', cost: 'Other blocks pay -40%', maxLevel: 3 },
-  { id: 'thorough', name: 'Thorough', tag: 'Harvest', gain: 'All blocks pay +40%', cost: 'The heart stays hidden until 12% of the planet remains', maxLevel: 3 },
-  { id: 'heartseeker', name: 'Heartseeker', tag: 'Bite', gain: 'Hunts the heart early, and hearts pay x3', cost: 'Leftover blocks pay nothing', maxLevel: 3 },
-  { id: 'ironjaw', name: 'Iron Jaw', tag: 'Bite', gain: 'Bite damage x2.5', cost: 'Crawl speed -30%', maxLevel: 3 },
-  { id: 'gorger', name: 'Gorger', tag: 'Frenzy', gain: 'Frenzy lasts 60% longer and doubles biomass', cost: null, maxLevel: 2 },
+// One is carved after every region and lasts until the saga passes on. Most
+// carry a real cost, so a build is a set of decisions and not a list of bonuses.
+export const RUNES: RuneDef[] = [
+  { id: 'kenaz', name: 'Kenaz', meaning: 'torch', tag: 'Blast', gain: 'Gas pockets reach 1 ring farther and hit 50% harder', cost: 'Drill damage -15%', maxLevel: 3 },
+  { id: 'sowilo', name: 'Sowilo', meaning: 'sun', tag: 'Blast', gain: 'Mead casks burst like gas and charge Berserk twice as fast', cost: null, maxLevel: 2 },
+  { id: 'thurisaz', name: 'Thurisaz', meaning: 'thorn', tag: 'Grind', gain: 'Hauler cutting x3', cost: 'Drill damage -30%', maxLevel: 3 },
+  { id: 'hagalaz', name: 'Hagalaz', meaning: 'hail', tag: 'Thunder', gain: 'Thunder fires 50% faster, with a wider blast', cost: 'Ship speed -15%', maxLevel: 3 },
+  { id: 'ansuz', name: 'Ansuz', meaning: 'Odin', tag: 'Ravens', gain: 'Raven damage x3', cost: 'Drill rate -25%', maxLevel: 3 },
+  { id: 'fehu', name: 'Fehu', meaning: 'wealth', tag: 'Harvest', gain: 'Gold pays x3, and the ship hunts it hard', cost: 'Other blocks pay -40%', maxLevel: 3 },
+  { id: 'jera', name: 'Jera', meaning: 'harvest', tag: 'Harvest', gain: 'All blocks pay +40%', cost: 'The Worldheart stays hidden until 12% of the region remains', maxLevel: 3 },
+  { id: 'tiwaz', name: 'Tiwaz', meaning: 'spear', tag: 'Drill', gain: 'Hunts the Worldheart early, and it pays x3', cost: 'Leftover blocks pay nothing', maxLevel: 3 },
+  { id: 'uruz', name: 'Uruz', meaning: 'strength', tag: 'Drill', gain: 'Drill damage x2.5', cost: 'Ship speed -30%', maxLevel: 3 },
+  { id: 'wunjo', name: 'Wunjo', meaning: 'joy', tag: 'Berserk', gain: 'Berserk lasts 60% longer and doubles silver', cost: null, maxLevel: 2 },
 ];
 
-export const MOLT = {
-  unlockPlanet: 5, // zero-based: must reach the 6th planet
-  baseChitin: 2,
-  chitinGrowth: 1.2, // each planet past the unlock is worth this much more
+export const SAGA = {
+  unlockRegion: 5, // zero-based: must reach the 6th region
+  baseGlory: 2,
+  gloryGrowth: 1.2, // each region past the unlock is worth this much more
 };
 
 export const OFFLINE = {
@@ -137,4 +138,4 @@ export const OFFLINE = {
   minSeconds: 45,
 };
 
-export const SAVE_KEY = 'wyrmhole.save.v1';
+export const SAVE_KEY = 'yggdrasil.save.v1';

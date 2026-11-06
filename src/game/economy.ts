@@ -1,76 +1,76 @@
-import { BLISTER, BROOD, FRENZY, MOLT, MUTATIONS, PERKS, PLANET, SPIT, UPGRADES, WORM, type MutationId, type PerkId, type UpgradeDef, type UpgradeId } from './config.ts';
-import { makePlanet } from './planet.ts';
-import { MOLT_READY, offlineCapSeconds, offlineShare, placeWorm, zeroMutations, zeroUpgrades, type GameState } from './state.ts';
+import { GAS, RAVENS, BERSERK, SAGA, RUNES, PERKS, REGION, THUNDER, UPGRADES, SHIP, type RuneId, type PerkId, type UpgradeDef, type UpgradeId } from './config.ts';
+import { makeRegion } from './region.ts';
+import { SAGA_READY, offlineCapSeconds, offlineShare, placeShip, zeroRunes, zeroUpgrades, type GameState } from './state.ts';
 
 export interface Stats {
-  jawDamage: number;
-  biteRate: number;
+  drillDamage: number;
+  drillRate: number;
   speed: number;
   segments: number;
   grindDamage: number;
-  biomassMul: number;
-  spitCooldown: number;
-  spitDamage: number;
-  broodCount: number;
-  broodDamage: number;
+  silverMul: number;
+  thunderCooldown: number;
+  thunderDamage: number;
+  ravenCount: number;
+  ravenDamage: number;
   blastRings: number;
   blastMul: number;
-  spitRings: number;
-  crustPayMul: number;
-  nectarPayMul: number;
-  nectarScent: number;
-  heartPayMul: number;
-  heartScentAt: number;
+  thunderRings: number;
+  rockPayMul: number;
+  goldPayMul: number;
+  goldPull: number;
+  corePayMul: number;
+  coreSeekAt: number;
   collapseValue: number;
-  frenzySeconds: number;
-  frenzyPayMul: number;
-  frenzyCharge: number;
-  pulseBursts: boolean;
+  berserkSeconds: number;
+  berserkPayMul: number;
+  berserkCharge: number;
+  meadBursts: boolean;
 }
 
 const milestone = (level: number) => 1.6 ** Math.floor(level / 25);
 
 export function computeStats(s: GameState): Stats {
   const u = s.upgrades;
-  const m = s.mutations;
-  const frenzy = s.frenzyLeft > 0;
-  const baseDamage = (1 + 0.7 * u.jaws) * milestone(u.jaws) * (1 + 0.3 * s.perks.fangs);
-  const jawDamage = baseDamage * 0.85 ** m.volatile * 0.7 ** m.serrated * 2.5 ** m.ironjaw;
-  const meta = 1 + 0.05 * u.metabolism;
-  const frenzySeconds = FRENZY.seconds * 1.6 ** m.gorger;
+  const m = s.runes;
+  const berserk = s.berserkLeft > 0;
+  const baseDamage = (1 + 0.7 * u.drill) * milestone(u.drill) * (1 + 0.3 * s.perks.steel);
+  const drillDamage = baseDamage * 0.85 ** m.kenaz * 0.7 ** m.thurisaz * 2.5 ** m.uruz;
+  const meta = 1 + 0.05 * u.forge;
+  const berserkSeconds = BERSERK.seconds * 1.6 ** m.wunjo;
   return {
-    jawDamage,
-    biteRate: WORM.biteRate * meta * 0.75 ** m.hive * (frenzy ? FRENZY.biteMul : 1),
-    speed: WORM.baseSpeed * (1 + 0.015 * u.metabolism) * 0.85 ** m.caustic * 0.7 ** m.ironjaw * (frenzy ? FRENZY.speedMul : 1),
-    segments: WORM.baseSegments + u.length,
-    // Grinding, spit and hatchlings scale from the unmodified bite, so a bite
-    // penalty stays a penalty on biting and these builds stand on their own.
-    grindDamage: baseDamage * WORM.grindShare * 3 ** m.serrated,
-    biomassMul: (1 + 0.3 * u.gut) * milestone(u.gut) * (1 + 0.3 * s.perks.hide) * 1.4 ** m.thorough,
-    spitCooldown: Math.max(SPIT.minCooldown, SPIT.baseCooldown * SPIT.cooldownMul ** u.spit) * 0.66 ** m.caustic,
-    spitDamage: baseDamage * (2 + 0.5 * u.spit),
-    broodCount: Math.min(u.brood, BROOD.maxCount),
-    broodDamage: baseDamage * BROOD.dmgShare * 3 ** m.hive,
-    blastRings: BLISTER.rings + m.volatile,
-    blastMul: 1.5 ** m.volatile,
-    spitRings: 1 + m.caustic,
-    crustPayMul: 0.6 ** m.sweet,
-    nectarPayMul: 3 ** m.sweet,
-    nectarScent: m.sweet > 0 ? 160 : 35,
-    heartPayMul: 3 ** m.heartseeker,
-    heartScentAt: m.heartseeker > 0 ? 0.8 : m.thorough > 0 ? 0.12 : PLANET.heartScentAt,
-    collapseValue: m.heartseeker > 0 ? 0 : PLANET.collapseValue,
-    frenzySeconds,
-    frenzyPayMul: frenzy ? 2 ** m.gorger : 1,
-    frenzyCharge: FRENZY.chargePerPulse * (m.livewire > 0 ? 2 : 1),
-    pulseBursts: m.livewire > 0,
+    drillDamage,
+    drillRate: SHIP.drillRate * meta * 0.75 ** m.ansuz * (berserk ? BERSERK.drillMul : 1),
+    speed: SHIP.baseSpeed * (1 + 0.015 * u.forge) * 0.85 ** m.hagalaz * 0.7 ** m.uruz * (berserk ? BERSERK.speedMul : 1),
+    segments: SHIP.baseSegments + u.haulers,
+    // Cutting, thunder and ravens scale from the unmodified drill, so a drill
+    // penalty stays a penalty on drilling and these builds stand on their own.
+    grindDamage: baseDamage * SHIP.grindShare * 3 ** m.thurisaz,
+    silverMul: (1 + 0.3 * u.smelter) * milestone(u.smelter) * (1 + 0.3 * s.perks.hoard) * 1.4 ** m.jera,
+    thunderCooldown: Math.max(THUNDER.minCooldown, THUNDER.baseCooldown * THUNDER.cooldownMul ** u.thunder) * 0.66 ** m.hagalaz,
+    thunderDamage: baseDamage * (2 + 0.5 * u.thunder),
+    ravenCount: Math.min(u.ravens, RAVENS.maxCount),
+    ravenDamage: baseDamage * RAVENS.dmgShare * 3 ** m.ansuz,
+    blastRings: GAS.rings + m.kenaz,
+    blastMul: 1.5 ** m.kenaz,
+    thunderRings: 1 + m.hagalaz,
+    rockPayMul: 0.6 ** m.fehu,
+    goldPayMul: 3 ** m.fehu,
+    goldPull: m.fehu > 0 ? 160 : 35,
+    corePayMul: 3 ** m.tiwaz,
+    coreSeekAt: m.tiwaz > 0 ? 0.8 : m.jera > 0 ? 0.12 : REGION.coreSeekAt,
+    collapseValue: m.tiwaz > 0 ? 0 : REGION.collapseValue,
+    berserkSeconds,
+    berserkPayMul: berserk ? 2 ** m.wunjo : 1,
+    berserkCharge: BERSERK.chargePerMead * (m.sowilo > 0 ? 2 : 1),
+    meadBursts: m.sowilo > 0,
   };
 }
 
 const upgradeDef = (id: UpgradeId) => UPGRADES.find((u) => u.id === id) as UpgradeDef;
 
 export function isUnlocked(s: GameState, def: UpgradeDef): boolean {
-  return s.runBestPlanet >= def.unlockPlanet;
+  return s.runBestRegion >= def.unlockRegion;
 }
 
 export function upgradeCost(id: UpgradeId, level: number, count = 1): number {
@@ -79,16 +79,16 @@ export function upgradeCost(id: UpgradeId, level: number, count = 1): number {
   return (first * (def.growth ** count - 1)) / (def.growth - 1);
 }
 
-/** How many levels the current biomass affords, up to the upgrade's cap. */
+/** How many levels the current silver affords, up to the upgrade's cap. */
 export function maxAffordable(s: GameState, id: UpgradeId): number {
   const def = upgradeDef(id);
   if (!isUnlocked(s, def)) return 0;
   const level = s.upgrades[id];
   const first = def.baseCost * def.growth ** level;
-  const n = Math.floor(Math.log((s.biomass * (def.growth - 1)) / first + 1) / Math.log(def.growth));
+  const n = Math.floor(Math.log((s.silver * (def.growth - 1)) / first + 1) / Math.log(def.growth));
   const count = Math.min(Math.max(0, n), def.maxLevel - level);
-  // Rounding can land one level high; the check keeps biomass from going negative.
-  return count > 0 && upgradeCost(id, level, count) > s.biomass ? count - 1 : count;
+  // Rounding can land one level high; the check keeps silver from going negative.
+  return count > 0 && upgradeCost(id, level, count) > s.silver ? count - 1 : count;
 }
 
 export function buyUpgrade(s: GameState, id: UpgradeId, count: number): boolean {
@@ -96,8 +96,8 @@ export function buyUpgrade(s: GameState, id: UpgradeId, count: number): boolean 
   if (!isUnlocked(s, def) || count <= 0) return false;
   if (s.upgrades[id] + count > def.maxLevel) return false;
   const cost = upgradeCost(id, s.upgrades[id], count);
-  if (cost > s.biomass) return false;
-  s.biomass -= cost;
+  if (cost > s.silver) return false;
+  s.silver -= cost;
   s.upgrades[id] += count;
   return true;
 }
@@ -115,31 +115,31 @@ export function autoBuy(s: GameState): void {
         bestCost = cost;
       }
     }
-    if (!best || bestCost > s.biomass) return;
+    if (!best || bestCost > s.silver) return;
     buyUpgrade(s, best.id, 1);
   }
 }
 
-/** Draws three different mutations for the player to choose between. */
-export function openMutationOffer(s: GameState, rand: () => number = Math.random): void {
-  if (s.mutationOffer || s.mutationPicks <= 0) return;
-  const pool = MUTATIONS.filter((m) => s.mutations[m.id] < m.maxLevel).map((m) => m.id);
+/** Draws three different runes for the player to choose between. */
+export function openRuneOffer(s: GameState, rand: () => number = Math.random): void {
+  if (s.runeOffer || s.runePicks <= 0) return;
+  const pool = RUNES.filter((m) => s.runes[m.id] < m.maxLevel).map((m) => m.id);
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   if (pool.length === 0) {
-    s.mutationPicks = 0;
+    s.runePicks = 0;
     return;
   }
-  s.mutationOffer = pool.slice(0, 3);
+  s.runeOffer = pool.slice(0, 3);
 }
 
-export function chooseMutation(s: GameState, id: MutationId): boolean {
-  if (!s.mutationOffer?.includes(id)) return false;
-  s.mutations[id] += 1;
-  s.mutationPicks -= 1;
-  s.mutationOffer = null;
+export function chooseRune(s: GameState, id: RuneId): boolean {
+  if (!s.runeOffer?.includes(id)) return false;
+  s.runes[id] += 1;
+  s.runePicks -= 1;
+  s.runeOffer = null;
   return true;
 }
 
@@ -153,46 +153,46 @@ export function buyPerk(s: GameState, id: PerkId): boolean {
   const def = PERKS.find((p) => p.id === id);
   if (!def || s.perks[id] >= def.maxLevel) return false;
   const cost = perkCost(id, s.perks[id]);
-  if (cost > s.chitin) return false;
-  s.chitin -= cost;
+  if (cost > s.glory) return false;
+  s.glory -= cost;
   s.perks[id] += 1;
   return true;
 }
 
-export function startingBiomass(s: GameState): number {
-  const y = s.perks.yolk;
+export function startingSilver(s: GameState): number {
+  const y = s.perks.stores;
   return y === 0 ? 0 : 25 * 2.2 ** (y - 1);
 }
 
-export function chitinPreview(s: GameState): number {
-  if (!MOLT_READY(s)) return 0;
-  return Math.floor(MOLT.baseChitin * MOLT.chitinGrowth ** (s.runBestPlanet - MOLT.unlockPlanet));
+export function gloryPreview(s: GameState): number {
+  if (!SAGA_READY(s)) return 0;
+  return Math.floor(SAGA.baseGlory * SAGA.gloryGrowth ** (s.runBestRegion - SAGA.unlockRegion));
 }
 
-export function molt(s: GameState): boolean {
-  if (!MOLT_READY(s)) return false;
-  s.chitin += chitinPreview(s);
-  s.molts += 1;
+export function passSaga(s: GameState): boolean {
+  if (!SAGA_READY(s)) return false;
+  s.glory += gloryPreview(s);
+  s.sagas += 1;
   s.seed = (s.seed + 7919) | 0;
   s.upgrades = zeroUpgrades();
-  s.mutations = zeroMutations();
-  s.mutationPicks = 0;
-  s.mutationOffer = null;
-  s.biomass = startingBiomass(s);
-  s.runBiomass = 0;
-  s.planetIndex = 0;
-  s.runBestPlanet = 0;
-  s.planet = makePlanet(0, s.seed);
-  placeWorm(s.worm, s.planet, s.seed);
-  s.brood = [];
-  s.frenzyCharge = 0;
-  s.frenzyLeft = 0;
-  s.phase = 'eating';
+  s.runes = zeroRunes();
+  s.runePicks = 0;
+  s.runeOffer = null;
+  s.silver = startingSilver(s);
+  s.runSilver = 0;
+  s.regionIndex = 0;
+  s.runBestRegion = 0;
+  s.region = makeRegion(0, s.seed);
+  placeShip(s.ship, s.region, s.seed);
+  s.ravens = [];
+  s.berserkCharge = 0;
+  s.berserkLeft = 0;
+  s.phase = 'mining';
   s.phaseLeft = 0;
-  s.lure = null;
+  s.waypoint = null;
   s.rate = 0;
   s.rateWindow = 0;
-  s.events.push({ t: 'planet', name: s.planet.name, index: 0 });
+  s.events.push({ t: 'region', name: s.region.name, index: 0 });
   return true;
 }
 
@@ -209,8 +209,8 @@ export function applyOffline(s: GameState, now: number, minSeconds: number): Off
   const seconds = Math.min(away, offlineCapSeconds(s));
   const gained = s.rate * offlineShare(s) * seconds;
   if (gained <= 0) return null;
-  s.biomass += gained;
-  s.runBiomass += gained;
-  s.lifetimeBiomass += gained;
+  s.silver += gained;
+  s.runSilver += gained;
+  s.lifetimeSilver += gained;
   return { seconds, gained };
 }

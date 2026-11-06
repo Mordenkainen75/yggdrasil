@@ -1,6 +1,6 @@
 // Lets the installed game open with no connection. Serves the saved copy
 // straight away and refreshes that copy in the background.
-const CACHE = 'wyrmhole-v1';
+const CACHE = 'yggdrasil-v1';
 
 // Saves the whole game at install, so it works offline from the very first
 // launch. Built files have generated names, so they're read from index.html.

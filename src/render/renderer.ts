@@ -1,4 +1,4 @@
-import { BLOCK, HEX_SIZE, WORM } from '../game/config.ts';
+import { BLOCK, HEX_SIZE, SHIP } from '../game/config.ts';
 import { computeStats } from '../game/economy.ts';
 import { segmentPos, type GameEvent, type GameState } from '../game/state.ts';
 import { fmt } from '../ui/format.ts';
@@ -14,7 +14,7 @@ interface Particle {
   spin: number;
   angle: number;
   color: string;
-  home: boolean; // flies into the worm's mouth
+  home: boolean; // flies into the ship's hold
 }
 
 interface Ring {
@@ -36,13 +36,22 @@ interface Pop {
   color: string;
 }
 
-interface Spit {
+interface Bolt {
   x0: number;
   y0: number;
   x1: number;
   y1: number;
   t: number;
 }
+
+const GOLD = '#ffd76a';
+const MEAD = '#ff9f45';
+const GAS = '#9be37a';
+const FORGE = '#ffb454';
+const BERSERK = '#ff6a3c';
+const ICE = '#9fe8ff';
+const THUNDER = '#9fdcff';
+const STEEL = '#b9d6f2';
 
 const MAX_PARTICLES = 1100;
 const HEX_INSET = 0.88;
@@ -77,7 +86,7 @@ export class Renderer {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
   private pops: Pop[] = [];
-  private spits: Spit[] = [];
+  private bolts: Bolt[] = [];
   private hits = new Map<number, number>();
   private stars: { x: number; y: number; depth: number; size: number }[] = [];
   private title: { name: string; sub: string; left: number } | null = null;
@@ -158,32 +167,32 @@ export class Renderer {
         case 'hit':
           this.hits.set(e.cell, 0.12);
           break;
-        case 'eat': {
+        case 'mine': {
           if (e.kind === 0) {
-            this.shards(e.x, e.y, `hsl(${e.hue} 70% 65%)`, 1, 150, 1.6);
+            this.shards(e.x, e.y, `hsl(${e.hue} 22% 62%)`, 1, 150, 1.6);
             break;
           }
-          const color = e.kind === BLOCK.NECTAR ? '#ffd76a' : e.kind === BLOCK.PULSE ? '#7fe9ff' : e.kind === BLOCK.BLISTER ? '#ff6f61' : `hsl(${e.hue} 70% 70%)`;
-          this.shards(e.x, e.y, color, e.kind === BLOCK.CRUST ? 3 : 7, 60);
-          this.spawn({ x: e.x, y: e.y, color: '#ffb454', home: true, size: 2, maxLife: 0.8, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60 });
-          if (e.kind === BLOCK.NECTAR) {
-            this.pops.push({ x: e.x, y: e.y, text: `+${fmt(e.value)}`, life: 1, color: '#ffd76a' });
-            this.ring(e.x, e.y, 4, 60, 0.4, '#ffd76a');
-          } else if (e.kind === BLOCK.PULSE) {
-            this.ring(e.x, e.y, 4, 110, 0.5, '#7fe9ff');
+          const color = e.kind === BLOCK.GOLD ? GOLD : e.kind === BLOCK.MEAD ? MEAD : e.kind === BLOCK.GAS ? GAS : `hsl(${e.hue} 22% 70%)`;
+          this.shards(e.x, e.y, color, e.kind === BLOCK.ROCK ? 3 : 7, 60);
+          this.spawn({ x: e.x, y: e.y, color: '#dfe9f2', home: true, size: 2, maxLife: 0.8, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60 });
+          if (e.kind === BLOCK.GOLD) {
+            this.pops.push({ x: e.x, y: e.y, text: `+${fmt(e.value)}`, life: 1, color: GOLD });
+            this.ring(e.x, e.y, 4, 60, 0.4, GOLD);
+          } else if (e.kind === BLOCK.MEAD) {
+            this.ring(e.x, e.y, 4, 110, 0.5, MEAD);
           }
           break;
         }
         case 'burst':
-          this.ring(e.x, e.y, 6, 170, 0.45, '#ff6f61', 3);
-          this.ring(e.x, e.y, 2, 90, 0.35, '#ffd0a8', 2);
-          this.shards(e.x, e.y, '#ff9d6f', 14, 150);
+          this.ring(e.x, e.y, 6, 170, 0.45, FORGE, 3);
+          this.ring(e.x, e.y, 2, 90, 0.35, '#fff0c8', 2);
+          this.shards(e.x, e.y, '#ff9d4f', 14, 150);
           this.addShake(3);
           break;
-        case 'spit':
-          this.spits.push({ x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, t: 0 });
+        case 'bolt':
+          this.bolts.push({ x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, t: 0 });
           break;
-        case 'heart':
+        case 'core':
           this.flash = 0.9;
           this.flashColor = `255,255,255`;
           this.addShake(14);
@@ -194,19 +203,19 @@ export class Renderer {
           this.shards(e.x, e.y, '#ffb454', 60, 200, 1.8);
           if (e.bonus > 0) this.pops.push({ x: e.x, y: e.y - 20, text: `COLLAPSE +${fmt(e.bonus)}`, life: 2, color: '#ffb454' });
           break;
-        case 'planet':
-          this.showTitle(s.planet.name, `World ${e.index + 1}`);
+        case 'region':
+          this.showTitle(s.region.name, `Midgard, region ${e.index + 1}`);
           this.overview = false;
           break;
-        case 'frenzy':
+        case 'berserk':
           this.flash = 0.4;
-          this.flashColor = '255,95,162';
-          this.ring(s.worm.x, s.worm.y, 10, 300, 0.7, '#ff5fa2', 4);
+          this.flashColor = '255,106,60';
+          this.ring(s.ship.x, s.ship.y, 10, 300, 0.7, BERSERK, 4);
           this.addShake(5);
           break;
-        case 'lure':
-          this.ring(e.x, e.y, 26, -30, 0.7, '#7df0d0', 2);
-          this.ring(e.x, e.y, 2, 40, 0.5, '#7df0d0', 1.5);
+        case 'waypoint':
+          this.ring(e.x, e.y, 26, -30, 0.7, ICE, 2);
+          this.ring(e.x, e.y, 2, 40, 0.5, ICE, 1.5);
           break;
       }
     }
@@ -220,10 +229,10 @@ export class Renderer {
     this.consume(s);
     this.updateCamera(s, dt);
     const { ctx } = this;
-    const frenzy = s.frenzyLeft > 0;
+    const berserk = s.berserkLeft > 0;
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.drawBackground(s, frenzy);
+    this.drawBackground(s, berserk);
 
     const sx = this.shake > 0.1 ? (Math.random() - 0.5) * this.shake : 0;
     const sy = this.shake > 0.1 ? (Math.random() - 0.5) * this.shake : 0;
@@ -234,10 +243,10 @@ export class Renderer {
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camX, -this.camY);
 
-    this.drawPlanet(s, dt);
-    this.drawSpits(dt);
-    this.drawBrood(s);
-    this.drawWorm(s, frenzy);
+    this.drawRegion(s, dt);
+    this.drawBolts(dt);
+    this.drawRavens(s);
+    this.drawShip(s, berserk);
     this.drawEffects(s, dt);
     ctx.restore();
 
@@ -246,8 +255,8 @@ export class Renderer {
       ctx.fillRect(0, 0, this.width, this.height);
       this.flash *= Math.exp(-5 * dt);
     }
-    if (frenzy) {
-      ctx.strokeStyle = `rgba(255,95,162,${0.35 + 0.2 * Math.sin(this.time * 10)})`;
+    if (berserk) {
+      ctx.strokeStyle = `rgba(255,106,60,${0.35 + 0.2 * Math.sin(this.time * 10)})`;
       ctx.lineWidth = 3;
       ctx.strokeRect(1.5, 1.5, this.width - 3, this.height - 3);
     }
@@ -255,8 +264,8 @@ export class Renderer {
   }
 
   private updateCamera(s: GameState, dt: number): void {
-    const w = s.worm;
-    const p = s.planet;
+    const w = s.ship;
+    const p = s.region;
     const fit = Math.min(this.width, this.height) / (p.worldRadius * 2 + 60);
     const wide = this.overview || s.phase === 'collapse';
     const targetZoom = wide ? fit : Math.max(fit, Math.min(this.width / 210, 2.6));
@@ -268,16 +277,16 @@ export class Renderer {
     this.zoom += (targetZoom - this.zoom) * ease;
   }
 
-  private drawBackground(s: GameState, frenzy: boolean): void {
+  private drawBackground(s: GameState, berserk: boolean): void {
     const { ctx, width, height } = this;
-    const hue = s.planet.hue;
+    const hue = s.region.hue;
     const g = ctx.createRadialGradient(width / 2, height * 0.45, 20, width / 2, height * 0.45, Math.max(width, height) * 0.8);
-    g.addColorStop(0, frenzy ? `hsl(335 45% 11%)` : `hsl(${hue} 40% 9%)`);
-    g.addColorStop(1, '#07060f');
+    g.addColorStop(0, berserk ? `hsl(14 50% 11%)` : `hsl(${hue} 24% 9%)`);
+    g.addColorStop(1, '#070a10');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = 'rgba(220,215,255,0.5)';
+    ctx.strokeStyle = 'rgba(215,228,245,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (const st of this.stars) {
@@ -293,16 +302,16 @@ export class Renderer {
     ctx.stroke();
   }
 
-  private drawPlanet(s: GameState, dt: number): void {
+  private drawRegion(s: GameState, dt: number): void {
     const { ctx } = this;
-    const p = s.planet;
+    const p = s.region;
     const hue = p.hue;
     const line = 1.3 / this.zoom;
     const viewW = this.width / this.zoom / 2 + HEX_SIZE * 2;
     const viewH = this.height / this.zoom / 2 + HEX_SIZE * 2;
 
-    if (s.phase === 'eating') {
-      ctx.strokeStyle = `hsla(${hue},70%,70%,0.12)`;
+    if (s.phase === 'mining') {
+      ctx.strokeStyle = `hsla(${hue},24%,70%,0.12)`;
       ctx.lineWidth = 2 / this.zoom;
       ctx.beginPath();
       ctx.arc(0, 0, p.worldRadius + 8, 0, 6.3);
@@ -311,11 +320,11 @@ export class Renderer {
 
     const size = HEX_SIZE * HEX_INSET;
     // One path per look: a single stroke call per colour keeps phones at 60fps.
-    const crust = [new Path2D(), new Path2D(), new Path2D()];
+    const rock = [new Path2D(), new Path2D(), new Path2D()];
     const cracks = new Path2D();
-    const nectar = new Path2D();
-    const pulse = new Path2D();
-    const blister = new Path2D();
+    const gold = new Path2D();
+    const mead = new Path2D();
+    const gas = new Path2D();
     const flashes = new Path2D();
     const beat = 0.5 + 0.5 * Math.sin(this.time * 4);
 
@@ -326,24 +335,39 @@ export class Renderer {
       const y = p.wy[i];
       if (Math.abs(x - this.camX) > viewW || Math.abs(y - this.camY) > viewH) continue;
 
-      if (kind === BLOCK.CRUST) hexPath(crust[Math.min(2, Math.floor(p.depth[i] * 3))], x, y, size);
-      else if (kind === BLOCK.NECTAR) {
-        hexPath(nectar, x, y, size);
-        hexPath(nectar, x, y, size * 0.45);
-      } else if (kind === BLOCK.PULSE) {
-        hexPath(pulse, x, y, size);
-        pulse.moveTo(x + size * 0.3, y);
-        pulse.arc(x, y, size * (0.22 + 0.12 * beat), 0, 6.3);
-      } else if (kind === BLOCK.BLISTER) {
-        hexPath(blister, x, y, size);
-        blister.moveTo(x + size * 0.55, y);
-        blister.arc(x, y, size * 0.55, 0, 6.3);
-        blister.moveTo(x + size * 0.2, y - size * 0.2);
-        blister.arc(x, y - size * 0.2, size * 0.14, 0, 6.3);
+      if (kind === BLOCK.ROCK) hexPath(rock[Math.min(2, Math.floor(p.depth[i] * 3))], x, y, size);
+      else if (kind === BLOCK.GOLD) {
+        // A faceted nugget.
+        hexPath(gold, x, y, size);
+        gold.moveTo(x, y - size * 0.44);
+        gold.lineTo(x + size * 0.38, y);
+        gold.lineTo(x, y + size * 0.44);
+        gold.lineTo(x - size * 0.38, y);
+        gold.closePath();
+      } else if (kind === BLOCK.MEAD) {
+        // A banded cask that swells very slightly.
+        const r = size * (0.42 + 0.03 * beat);
+        hexPath(mead, x, y, size);
+        mead.moveTo(x + r * 0.78, y);
+        mead.ellipse(x, y, r * 0.78, r * 1.08, 0, 0, 6.3);
+        mead.moveTo(x - r * 0.76, y - r * 0.4);
+        mead.lineTo(x + r * 0.76, y - r * 0.4);
+        mead.moveTo(x - r * 0.76, y + r * 0.4);
+        mead.lineTo(x + r * 0.76, y + r * 0.4);
+      } else if (kind === BLOCK.GAS) {
+        // Three rising bubbles.
+        const rise = size * 0.06 * beat;
+        hexPath(gas, x, y, size);
+        gas.moveTo(x + size * 0.04, y + size * 0.16);
+        gas.arc(x - size * 0.2, y + size * 0.16, size * 0.24, 0, 6.3);
+        gas.moveTo(x + size * 0.44, y - size * 0.1 - rise);
+        gas.arc(x + size * 0.28, y - size * 0.1 - rise, size * 0.16, 0, 6.3);
+        gas.moveTo(x + size * 0.08, y - size * 0.38 - rise);
+        gas.arc(x - size * 0.02, y - size * 0.38 - rise, size * 0.1, 0, 6.3);
       }
 
       const health = p.hp[i] / p.maxHp[i];
-      if (kind !== BLOCK.HEART && health < 0.7) {
+      if (kind !== BLOCK.CORE && health < 0.7) {
         const seed = (i * 7) % 6;
         const count = health < 0.35 ? 3 : 1;
         for (let c = 0; c < count; c++) {
@@ -355,29 +379,29 @@ export class Renderer {
       if (this.hits.has(i)) hexPath(flashes, x, y, size);
     }
 
-    const shades = [`hsl(${hue} 46% 24%)`, `hsl(${hue} 42% 17%)`, `hsl(${hue} 38% 12%)`];
-    const strokes = [`hsl(${hue} 70% 68%)`, `hsl(${hue} 66% 58%)`, `hsl(${hue} 62% 50%)`];
+    const shades = [`hsl(${hue} 16% 24%)`, `hsl(${hue} 14% 17%)`, `hsl(${hue} 12% 12%)`];
+    const strokes = [`hsl(${hue} 26% 64%)`, `hsl(${hue} 24% 53%)`, `hsl(${hue} 22% 44%)`];
     ctx.lineWidth = line;
     ctx.lineJoin = 'round';
     for (let t = 0; t < 3; t++) {
       ctx.fillStyle = shades[t];
       ctx.strokeStyle = strokes[t];
-      ctx.fill(crust[t]);
-      ctx.stroke(crust[t]);
+      ctx.fill(rock[t]);
+      ctx.stroke(rock[t]);
     }
     ctx.fillStyle = 'rgba(255,215,106,0.16)';
-    ctx.strokeStyle = '#ffd76a';
-    ctx.fill(nectar);
-    ctx.stroke(nectar);
-    ctx.fillStyle = 'rgba(127,233,255,0.14)';
-    ctx.strokeStyle = '#7fe9ff';
-    ctx.fill(pulse);
-    ctx.stroke(pulse);
-    ctx.fillStyle = 'rgba(255,111,97,0.18)';
-    ctx.strokeStyle = '#ff6f61';
-    ctx.fill(blister);
-    ctx.stroke(blister);
-    ctx.strokeStyle = 'rgba(7,6,15,0.85)';
+    ctx.strokeStyle = GOLD;
+    ctx.fill(gold);
+    ctx.stroke(gold);
+    ctx.fillStyle = 'rgba(255,159,69,0.16)';
+    ctx.strokeStyle = MEAD;
+    ctx.fill(mead);
+    ctx.stroke(mead);
+    ctx.fillStyle = 'rgba(155,227,122,0.14)';
+    ctx.strokeStyle = GAS;
+    ctx.fill(gas);
+    ctx.stroke(gas);
+    ctx.strokeStyle = 'rgba(7,10,16,0.85)';
     ctx.lineWidth = line * 1.2;
     ctx.stroke(cracks);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -388,14 +412,14 @@ export class Renderer {
       else this.hits.set(cell, left - dt);
     }
 
-    if (p.kind[p.heart] === BLOCK.HEART) {
-      const x = p.wx[p.heart];
-      const y = p.wy[p.heart];
-      const health = p.hp[p.heart] / p.maxHp[p.heart];
+    if (p.kind[p.core] === BLOCK.CORE) {
+      const x = p.wx[p.core];
+      const y = p.wy[p.core];
+      const health = p.hp[p.core] / p.maxHp[p.core];
       const pump = 1 + 0.08 * Math.max(0, Math.sin(this.time * 5)) ** 3;
       ctx.lineWidth = 1.8 / this.zoom;
-      ctx.strokeStyle = '#ff3d71';
-      ctx.fillStyle = `rgba(255,61,113,${0.2 + 0.25 * (1 - health)})`;
+      ctx.strokeStyle = '#ff4d3d';
+      ctx.fillStyle = `rgba(255,77,61,${0.2 + 0.25 * (1 - health)})`;
       for (let r = 0; r < 3; r++) {
         ctx.beginPath();
         hexPath(ctx, x, y, size * pump * (1 - r * 0.28));
@@ -412,48 +436,60 @@ export class Renderer {
     }
   }
 
-  private drawSpits(dt: number): void {
+  private drawBolts(dt: number): void {
     const { ctx } = this;
     ctx.lineCap = 'round';
-    ctx.lineWidth = 3 / this.zoom;
-    ctx.strokeStyle = '#b7ff6a';
-    for (let i = this.spits.length - 1; i >= 0; i--) {
-      const sp = this.spits[i];
-      sp.t += dt * 3.2;
-      if (sp.t >= 1) {
-        this.ring(sp.x1, sp.y1, 4, 90, 0.35, '#b7ff6a');
-        this.shards(sp.x1, sp.y1, '#b7ff6a', 8, 80);
-        this.spits.splice(i, 1);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2 / this.zoom;
+    ctx.strokeStyle = THUNDER;
+    for (let i = this.bolts.length - 1; i >= 0; i--) {
+      const b = this.bolts[i];
+      b.t += dt * 3.2;
+      if (b.t >= 1) {
+        this.ring(b.x1, b.y1, 4, 90, 0.35, THUNDER);
+        this.shards(b.x1, b.y1, THUNDER, 8, 80);
+        this.bolts.splice(i, 1);
         continue;
       }
-      const x = sp.x0 + (sp.x1 - sp.x0) * sp.t;
-      const y = sp.y0 + (sp.y1 - sp.y0) * sp.t;
-      const bx = sp.x0 + (sp.x1 - sp.x0) * Math.max(0, sp.t - 0.14);
-      const by = sp.y0 + (sp.y1 - sp.y0) * Math.max(0, sp.t - 0.14);
+      // A jagged line, redrawn from the ship to the leading edge of the strike.
+      const dx = b.x1 - b.x0;
+      const dy = b.y1 - b.y0;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const links = 7;
       ctx.beginPath();
-      ctx.moveTo(bx, by);
-      ctx.lineTo(x, y);
+      for (let k = 0; k <= links; k++) {
+        const along = (k / links) * b.t;
+        const jag = k === 0 ? 0 : Math.sin(k * 12.9 + b.x0) * 5;
+        const x = b.x0 + dx * along + nx * jag;
+        const y = b.y0 + dy * along + ny * jag;
+        if (k === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
       ctx.stroke();
     }
   }
 
-  private drawBrood(s: GameState): void {
+  private drawRavens(s: GameState): void {
     const { ctx } = this;
-    ctx.strokeStyle = '#ffd9a0';
+    ctx.strokeStyle = '#d5dcf5';
     ctx.lineWidth = 1.6 / this.zoom;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    s.brood.forEach((b, i) => {
-      const wiggle = Math.sin(this.time * 12 + i) * 2;
-      ctx.moveTo(b.x - 4, b.y + wiggle);
-      ctx.quadraticCurveTo(b.x, b.y - wiggle, b.x + 4, b.y + wiggle);
+    s.ravens.forEach((b, i) => {
+      // Two wings, flapping out of step with each other.
+      const flap = Math.sin(this.time * 14 + i * 1.7) * 2.2;
+      ctx.moveTo(b.x - 5, b.y - flap);
+      ctx.quadraticCurveTo(b.x - 2, b.y - 2 - flap * 0.3, b.x, b.y);
+      ctx.quadraticCurveTo(b.x + 2, b.y - 2 - flap * 0.3, b.x + 5, b.y - flap);
     });
     ctx.stroke();
   }
 
-  private drawWorm(s: GameState, frenzy: boolean): void {
+  private drawShip(s: GameState, berserk: boolean): void {
     const { ctx } = this;
-    const w = s.worm;
+    const w = s.ship;
     const st = computeStats(s);
     const n = st.segments;
     const pos = { x: 0, y: 0 };
@@ -467,91 +503,143 @@ export class Renderer {
       ys[i + 1] = pos.y;
     }
 
-    const color = frenzy ? '#ff7db8' : '#ffb454';
-    const left = new Path2D();
-    const right = new Path2D();
-    const ribs = new Path2D();
-    for (let i = 0; i <= n; i++) {
-      const a = Math.max(0, i - 1);
+    const color = berserk ? '#ff9a78' : STEEL;
+    const accent = berserk ? '#ffe0b0' : FORGE;
+    const pods = new Path2D();
+    const links = new Path2D();
+    const shields = new Path2D();
+
+    // The convoy: rigid hauler pods in single file, each with a shield either
+    // side. Hard corners and no swelling keep it reading as machinery.
+    for (let i = 1; i <= n; i++) {
       const b = Math.min(n, i + 1);
-      const dx = xs[a] - xs[b];
-      const dy = ys[a] - ys[b];
+      const dx = xs[i - 1] - xs[b];
+      const dy = ys[i - 1] - ys[b];
       const len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len;
-      const ny = dx / len;
-      const taper = 1 - (i / (n + 1)) ** 2 * 0.8;
-      const swell = 1 + 0.1 * Math.sin(this.time * 7 - i * 0.7);
-      const r = WORM.bodyRadius * taper * swell;
-      const lx = xs[i] + nx * r;
-      const ly = ys[i] + ny * r;
-      const rx = xs[i] - nx * r;
-      const ry = ys[i] - ny * r;
-      if (i === 0) {
-        left.moveTo(lx, ly);
-        right.moveTo(rx, ry);
-      } else {
-        left.lineTo(lx, ly);
-        right.lineTo(rx, ry);
+      const ux = dx / len;
+      const uy = dy / len;
+      const hl = 3.3;
+      const hw = SHIP.haulerRadius * 0.74 * (1 - (i / (n + 1)) ** 2 * 0.3);
+      const fx = xs[i] + ux * hl;
+      const fy = ys[i] + uy * hl;
+      const rx = xs[i] - ux * hl;
+      const ry = ys[i] - uy * hl;
+      pods.moveTo(fx - uy * hw, fy + ux * hw);
+      pods.lineTo(fx + uy * hw, fy - ux * hw);
+      pods.lineTo(rx + uy * hw, ry - ux * hw);
+      pods.lineTo(rx - uy * hw, ry + ux * hw);
+      pods.closePath();
+      links.moveTo(fx, fy);
+      links.lineTo(xs[i - 1] - ux * (i === 1 ? 10 : hl), ys[i - 1] - uy * (i === 1 ? 10 : hl));
+      for (const side of [-1, 1]) {
+        const sx = xs[i] - uy * side * (hw + 0.4);
+        const sy = ys[i] + ux * side * (hw + 0.4);
+        shields.moveTo(sx + 1.5, sy);
+        shields.arc(sx, sy, 1.5, 0, 6.3);
       }
-      ribs.moveTo(lx, ly);
-      ribs.quadraticCurveTo(xs[i] - (dx / len) * r * 0.6, ys[i] - (dy / len) * r * 0.6, rx, ry);
     }
 
-    ctx.lineJoin = 'round';
+    ctx.lineJoin = 'miter';
     ctx.lineCap = 'round';
+    ctx.strokeStyle = color;
     // A wide faint pass under the crisp lines reads as glow, for far less
     // cost than canvas shadowBlur.
-    ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 9 / this.zoom;
-    ctx.stroke(left);
-    ctx.stroke(right);
+    ctx.globalAlpha = 0.16;
+    ctx.lineWidth = 7 / this.zoom;
+    ctx.stroke(pods);
     ctx.globalAlpha = 1;
-    ctx.lineWidth = 1.7 / this.zoom;
-    ctx.stroke(left);
-    ctx.stroke(right);
-    ctx.globalAlpha = 0.7;
-    ctx.lineWidth = 1.2 / this.zoom;
-    ctx.stroke(ribs);
-    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.1 / this.zoom;
+    ctx.stroke(links);
+    ctx.fillStyle = '#0b1119';
+    ctx.fill(pods);
+    ctx.lineWidth = 1.5 / this.zoom;
+    ctx.stroke(pods);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1 / this.zoom;
+    ctx.stroke(shields);
 
-    // Head: a blunt wedge with working mandibles.
-    const chew = w.biting ? 0.35 + 0.35 * Math.abs(Math.sin(this.time * Math.min(st.biteRate, 12) * 3.14)) : 0.2;
+    // The flagship: a longship hull with a dragon's jaws clamped round the drill.
+    const spin = w.drilling ? this.time * Math.min(st.drillRate, 12) * 1.2 : this.time * 0.8;
     ctx.save();
     ctx.translate(w.x, w.y);
     ctx.rotate(w.angle);
-    ctx.fillStyle = '#07060f';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2 / this.zoom;
+    ctx.lineJoin = 'round';
+
+    // Drill cone, with bands that run towards the tip as it turns.
+    ctx.strokeStyle = accent;
+    ctx.fillStyle = '#0b1119';
+    ctx.lineWidth = 1.6 / this.zoom;
     ctx.beginPath();
-    ctx.moveTo(-5, -7.5);
-    ctx.quadraticCurveTo(5, -9, 8, -3.5);
-    ctx.lineTo(8, 3.5);
-    ctx.quadraticCurveTo(5, 9, -5, 7.5);
+    ctx.moveTo(7, -4.2);
+    ctx.lineTo(19, 0);
+    ctx.lineTo(7, 4.2);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    for (const side of [-1, 1]) {
-      ctx.save();
-      ctx.translate(7, side * 3);
-      ctx.rotate(side * chew);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(6, side * 2.5, 9, -side * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.fillStyle = frenzy ? '#ffffff' : '#7df0d0';
+    ctx.lineWidth = 1.1 / this.zoom;
     ctx.beginPath();
-    ctx.arc(2, -4, 1.3, 0, 6.3);
-    ctx.arc(2, 4, 1.3, 0, 6.3);
+    for (let k = 0; k < 3; k++) {
+      const t = (spin + k / 3) % 1;
+      const x = 7 + 12 * t;
+      const half = 4.2 * (1 - t);
+      ctx.moveTo(x + 1.6 * (1 - t), -half);
+      ctx.lineTo(x - 1.6 * (1 - t), half);
+    }
+    ctx.stroke();
+
+    // Hull, pointed at both ends like a longship seen from above.
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 / this.zoom;
+    ctx.beginPath();
+    ctx.moveTo(-13, 0);
+    ctx.quadraticCurveTo(-6, -8.5, 4, -6.5);
+    ctx.lineTo(9, -4);
+    ctx.lineTo(9, 4);
+    ctx.lineTo(4, 6.5);
+    ctx.quadraticCurveTo(-6, 8.5, -13, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Keel line and the dragon's upper jaws.
+    ctx.lineWidth = 1.1 / this.zoom;
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(3, 0);
+    for (const side of [-1, 1]) {
+      ctx.moveTo(4, side * 6.5);
+      ctx.quadraticCurveTo(10, side * 8, 13, side * 3.4);
+      ctx.moveTo(-1, side * 6.8);
+      ctx.lineTo(-6, side * 10);
+      ctx.lineTo(-4, side * 6.6);
+    }
+    ctx.stroke();
+
+    // Shields along the gunwale.
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1 / this.zoom;
+    ctx.beginPath();
+    for (const x of [-5, -1, 3]) {
+      for (const side of [-1, 1]) {
+        const y = side * (x === -5 ? 4.6 : 5);
+        ctx.moveTo(x + 1.5, y);
+        ctx.arc(x, y, 1.5, 0, 6.3);
+      }
+    }
+    ctx.stroke();
+
+    // Forge-lit eyes.
+    ctx.fillStyle = berserk ? '#ffffff' : accent;
+    ctx.beginPath();
+    ctx.arc(6, -2.2, 1.1, 0, 6.3);
+    ctx.arc(6, 2.2, 1.1, 0, 6.3);
     ctx.fill();
     ctx.restore();
   }
 
   private drawEffects(s: GameState, dt: number): void {
     const { ctx } = this;
-    const w = s.worm;
+    const w = s.ship;
 
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
@@ -607,13 +695,13 @@ export class Renderer {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 
-    if (s.lure) {
-      ctx.strokeStyle = `rgba(125,240,208,${Math.min(1, s.lure.left)})`;
+    if (s.waypoint) {
+      ctx.strokeStyle = `rgba(159,232,255,${Math.min(1, s.waypoint.left)})`;
       ctx.lineWidth = 1.5 / this.zoom;
       const t = this.time * 3;
       ctx.beginPath();
       for (let i = 0; i < 3; i++) {
-        ctx.arc(s.lure.x, s.lure.y, 9, t + i * 2.09, t + i * 2.09 + 1.2);
+        ctx.arc(s.waypoint.x, s.waypoint.y, 9, t + i * 2.09, t + i * 2.09 + 1.2);
       }
       ctx.stroke();
     }
@@ -647,10 +735,10 @@ export class Renderer {
     const age = 3 - t.left;
     ctx.globalAlpha = Math.min(1, age * 3, t.left * 2);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#9a93bb';
+    ctx.fillStyle = '#8fa0b3';
     ctx.font = '12px ui-monospace, monospace';
     ctx.fillText(t.sub.toUpperCase(), width / 2, height * 0.3);
-    ctx.fillStyle = '#ece7ff';
+    ctx.fillStyle = '#e8eef5';
     ctx.font = '700 24px ui-monospace, monospace';
     ctx.fillText(t.name, width / 2, height * 0.3 + 28);
     ctx.globalAlpha = 1;

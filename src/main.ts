@@ -3,7 +3,7 @@ import { Sound } from './audio.ts';
 import { BLOCK, OFFLINE, TICK } from './game/config.ts';
 import { applyOffline } from './game/economy.ts';
 import { clearStorage, loadFromStorage, saveToStorage } from './game/save.ts';
-import { setLure, step } from './game/sim.ts';
+import { setWaypoint, step } from './game/sim.ts';
 import { newGame, type GameState } from './game/state.ts';
 import { Renderer } from './render/renderer.ts';
 import { Ui } from './ui/ui.ts';
@@ -20,9 +20,9 @@ const sound = new Sound();
 
 const ui = new Ui(state, {
   onBuy: () => sound.buy(),
-  onMutate: () => sound.mutate(),
-  onMolt: () => {
-    sound.heart();
+  onCarve: () => sound.carve(),
+  onSagaPassed: () => {
+    sound.core();
     saveToStorage(state);
   },
   toggleView: () => renderer.toggleOverview(),
@@ -34,22 +34,22 @@ const ui = new Ui(state, {
     clearStorage();
     state = newGame();
     ui.setState(state);
-    renderer.showTitle(state.planet.name, 'World 1');
+    renderer.showTitle(state.region.name, 'Midgard, region 1');
   },
 });
 
 renderer.onEvent = (e) => {
-  if (e.t === 'eat' && e.kind !== 0) {
-    if (e.kind === BLOCK.NECTAR) sound.nectar();
+  if (e.t === 'mine' && e.kind !== 0) {
+    if (e.kind === BLOCK.GOLD) sound.gold();
     else sound.crunch();
   } else if (e.t === 'burst') {
     sound.blast();
-  } else if (e.t === 'heart') {
-    sound.heart();
+  } else if (e.t === 'core') {
+    sound.core();
     navigator.vibrate?.(60);
     saveToStorage(state);
-  } else if (e.t === 'frenzy') {
-    sound.frenzy();
+  } else if (e.t === 'berserk') {
+    sound.berserk();
   }
 };
 
@@ -62,7 +62,7 @@ canvas.addEventListener('pointerdown', (e) => {
   sound.unlock();
   const rect = canvas.getBoundingClientRect();
   const world = renderer.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-  if (state.phase === 'eating') setLure(state, world.x, world.y);
+  if (state.phase === 'mining') setWaypoint(state, world.x, world.y);
 });
 window.addEventListener('pointerdown', () => sound.unlock(), { once: true });
 
@@ -100,7 +100,7 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 
-renderer.showTitle(state.planet.name, `World ${state.planetIndex + 1}`);
+renderer.showTitle(state.region.name, `Midgard, region ${state.regionIndex + 1}`);
 checkAway();
 state.lastSeen = Date.now();
 requestAnimationFrame(loop);

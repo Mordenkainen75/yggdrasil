@@ -1,4 +1,4 @@
-// Small seeded random generator (mulberry32). Same seed, same planet.
+// Small seeded random generator (mulberry32). Same seed, same region.
 export type Rng = () => number;
 
 export function makeRng(seed: number): Rng {

@@ -1,4 +1,4 @@
-// Draws the app icons with no image tools: a curled line-art wyrm around a hex,
+// Draws the app icons with no image tools: a world-tree rune inside a hex,
 // written straight to PNG. Run with `npm run icons`.
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -33,16 +33,17 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 
 function makeIcon(size: number): Buffer {
   // All shapes sit in the centre 70%, the safe zone for Android's masked icons.
-  const spiral: [number, number][] = [];
-  for (let i = 0; i <= 90; i++) {
-    const t = i / 90;
-    const a = t * Math.PI * 3.1 + 2.4;
-    const r = 0.33 - 0.19 * t;
-    spiral.push([0.5 + Math.cos(a) * r, 0.5 + Math.sin(a) * r]);
-  }
+  // A trunk with two branches above and two roots below.
+  const tree: [number, number, number, number][] = [
+    [0.5, 0.25, 0.5, 0.75],
+    [0.5, 0.45, 0.38, 0.31],
+    [0.5, 0.45, 0.62, 0.31],
+    [0.5, 0.56, 0.38, 0.69],
+    [0.5, 0.56, 0.62, 0.69],
+  ];
   const hex = Array.from({ length: 7 }, (_, i) => {
     const a = (Math.PI / 3) * i - Math.PI / 6;
-    return [0.5 + Math.cos(a) * 0.075, 0.5 + Math.sin(a) * 0.075] as [number, number];
+    return [0.5 + Math.cos(a) * 0.34, 0.5 + Math.sin(a) * 0.34] as [number, number];
   });
 
   const raw = Buffer.alloc((size * 4 + 1) * size);
@@ -52,28 +53,27 @@ function makeIcon(size: number): Buffer {
     for (let x = 0; x < size; x++) {
       const u = (x + 0.5) / size;
       const v = (y + 0.5) / size;
-      let wyrm = Infinity;
-      for (let i = 1; i < spiral.length; i++) {
-        const width = 0.04 * (1 - (i / spiral.length) * 0.65);
-        wyrm = Math.min(wyrm, distToSegment(u, v, spiral[i - 1][0], spiral[i - 1][1], spiral[i][0], spiral[i][1]) - width);
+      let rune = Infinity;
+      for (const [ax, ay, bx, by] of tree) {
+        rune = Math.min(rune, distToSegment(u, v, ax, ay, bx, by) - 0.024);
       }
-      let core = Infinity;
+      let frame = Infinity;
       for (let i = 1; i < hex.length; i++) {
-        core = Math.min(core, distToSegment(u, v, hex[i - 1][0], hex[i - 1][1], hex[i][0], hex[i][1]) - 0.009);
+        frame = Math.min(frame, distToSegment(u, v, hex[i - 1][0], hex[i - 1][1], hex[i][0], hex[i][1]) - 0.011);
       }
       const edge = 1.5 / size;
-      const a = Math.max(0, Math.min(1, 0.5 - wyrm / edge));
-      const c = Math.max(0, Math.min(1, 0.5 - core / edge));
+      const a = Math.max(0, Math.min(1, 0.5 - rune / edge));
+      const c = Math.max(0, Math.min(1, 0.5 - frame / edge));
       const bgGlow = Math.max(0, 1 - Math.hypot(u - 0.5, v - 0.5) * 2) * 26;
-      let red = 7 + bgGlow * 0.5;
-      let green = 6 + bgGlow * 0.2;
-      let blue = 15 + bgGlow;
+      let red = 7 + bgGlow * 0.3;
+      let green = 10 + bgGlow * 0.5;
+      let blue = 16 + bgGlow;
       red += (255 - red) * a;
       green += (180 - green) * a;
       blue += (84 - blue) * a;
-      red += (125 - red) * c;
-      green += (240 - green) * c;
-      blue += (208 - blue) * c;
+      red += (185 - red) * c;
+      green += (214 - green) * c;
+      blue += (242 - blue) * c;
       const o = row + 1 + x * 4;
       raw[o] = red;
       raw[o + 1] = green;

@@ -1,4 +1,4 @@
-# Wyrmhole
+# Yggdrasil (working title)
 
 A personal Android idle game, built as an installable web app (PWA). Read
 `docs/DESIGN.md` first. Its pledge (no ads, no real money, no pressure tactics)
@@ -14,7 +14,8 @@ is a hard requirement for every feature.
 
 ## Publishing
 
-- Live game: https://mordenkainen75.github.io/wyrmhole/
+- Not published yet. The plan is GitHub Pages under `Mordenkainen75`, with the
+  repo name chosen once the title is settled.
 - This is Daniel's personal project: it belongs to the GitHub account
   `Mordenkainen75`, not the work account `DriveraECSD`, which stays the default
   on this laptop. Never publish this repo from the work account.
@@ -29,7 +30,7 @@ is a hard requirement for every feature.
 
 - `src/game/`: the rules. No DOM or canvas allowed here, so the same code runs
   in the browser, in tests and in the balance simulator.
-- `src/game/config.ts`: every balance number, upgrade, perk and mutation.
+- `src/game/config.ts`: every balance number, upgrade, perk and rune.
 - `src/render/renderer.ts`: canvas drawing and effects. It reads state and
   consumes `state.events`. It must never change game rules.
 - `src/ui/ui.ts`: HUD, tabs and modals (plain DOM).
@@ -43,5 +44,5 @@ is a hard requirement for every feature.
   pacing targets in `docs/DESIGN.md`.
 - New saved fields must have defaults in `deserialize`, so old saves keep working.
 - In dev builds `window.game()` returns live state for automated playtests.
-- Blocks, worm and effects are line art. Don't use `shadowBlur`: it hurts phone
+- Blocks, the ship and effects are line art. Don't use `shadowBlur`: it hurts phone
   frame rates. Fake glow with a wide, faint stroke under a crisp one.

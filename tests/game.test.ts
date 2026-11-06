@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BLOCK, TICK } from '../src/game/config.ts';
-import { applyOffline, buyUpgrade, chitinPreview, chooseMutation, computeStats, maxAffordable, molt, openMutationOffer, upgradeCost } from '../src/game/economy.ts';
+import { applyOffline, buyUpgrade, gloryPreview, chooseRune, computeStats, maxAffordable, passSaga, openRuneOffer, upgradeCost } from '../src/game/economy.ts';
 import { hexToWorldX, hexToWorldY, worldToHex } from '../src/game/hex.ts';
-import { cellAt, forEachInRange, makePlanet } from '../src/game/planet.ts';
+import { cellAt, forEachInRange, makeRegion } from '../src/game/region.ts';
 import { deserialize, serialize } from '../src/game/save.ts';
-import { step, triggerFrenzy } from '../src/game/sim.ts';
+import { step, triggerBerserk } from '../src/game/sim.ts';
 import { newGame } from '../src/game/state.ts';
 
 test('hex coordinates round-trip through world space', () => {
@@ -18,121 +18,121 @@ test('hex coordinates round-trip through world space', () => {
   }
 });
 
-test('planets are deterministic and have one heart', () => {
-  const a = makePlanet(3, 42);
-  const b = makePlanet(3, 42);
+test('regions are deterministic and have one core', () => {
+  const a = makeRegion(3, 42);
+  const b = makeRegion(3, 42);
   assert.deepEqual(a.kind, b.kind);
   assert.equal(a.name, b.name);
-  assert.equal(a.kind.filter((k) => k === BLOCK.HEART).length, 1);
+  assert.equal(a.kind.filter((k) => k === BLOCK.CORE).length, 1);
   assert.equal(a.remaining, a.total);
-  assert.equal(cellAt(a, 0, 0), a.heart);
+  assert.equal(cellAt(a, 0, 0), a.core);
 });
 
 test('range lookup covers a full hex ring', () => {
-  const p = makePlanet(0, 1);
+  const p = makeRegion(0, 1);
   let count = 0;
-  forEachInRange(p, p.heart, 1, () => count++);
+  forEachInRange(p, p.core, 1, () => count++);
   assert.equal(count, 7);
 });
 
 test('bulk cost matches buying one at a time', () => {
   let sum = 0;
-  for (let i = 0; i < 10; i++) sum += upgradeCost('jaws', 5 + i);
-  assert.ok(Math.abs(sum - upgradeCost('jaws', 5, 10)) < 1e-6);
+  for (let i = 0; i < 10; i++) sum += upgradeCost('drill', 5 + i);
+  assert.ok(Math.abs(sum - upgradeCost('drill', 5, 10)) < 1e-6);
 });
 
 test('max-buy never overspends and respects the level cap', () => {
   const s = newGame(1);
-  s.biomass = 1e6;
-  const n = maxAffordable(s, 'jaws');
-  assert.ok(buyUpgrade(s, 'jaws', n));
-  assert.ok(s.biomass >= 0);
-  assert.equal(maxAffordable(s, 'jaws'), 0);
-  s.biomass = 1e300;
-  assert.equal(maxAffordable(s, 'brood'), 0, 'brood is locked on the first planet');
-  s.upgrades.metabolism = 119;
-  assert.equal(maxAffordable(s, 'metabolism'), 1);
+  s.silver = 1e6;
+  const n = maxAffordable(s, 'drill');
+  assert.ok(buyUpgrade(s, 'drill', n));
+  assert.ok(s.silver >= 0);
+  assert.equal(maxAffordable(s, 'drill'), 0);
+  s.silver = 1e300;
+  assert.equal(maxAffordable(s, 'ravens'), 0, 'ravens is locked on the first region');
+  s.upgrades.forge = 119;
+  assert.equal(maxAffordable(s, 'forge'), 1);
 });
 
-test('a worm left alone eats the first planet and moves on', () => {
+test('a ship left alone mines out the first region and moves on', () => {
   const s = newGame(7);
   let guard = 0;
-  while (s.planetIndex === 0 && guard++ < 30 * 900) {
+  while (s.regionIndex === 0 && guard++ < 30 * 900) {
     step(s, TICK);
     s.events.length = 0;
   }
-  assert.equal(s.planetIndex, 1, 'planet 1 should fall within 15 game minutes with no upgrades');
-  assert.ok(s.biomass > 0);
+  assert.equal(s.regionIndex, 1, 'region 1 should fall within 15 game minutes with no upgrades');
+  assert.ok(s.silver > 0);
 });
 
-test('mutations offer three choices, apply, and clear on molt', () => {
+test('runes offer three choices, apply, and clear when the saga passes on', () => {
   const s = newGame(6);
   assert.equal(computeStats(s).blastRings, 2);
-  s.mutationPicks = 2;
-  openMutationOffer(s, () => 0.3);
-  const offer = s.mutationOffer ?? [];
+  s.runePicks = 2;
+  openRuneOffer(s, () => 0.3);
+  const offer = s.runeOffer ?? [];
   assert.equal(offer.length, 3);
   assert.equal(new Set(offer).size, 3);
-  assert.equal(chooseMutation(s, offer[0]), true);
-  assert.equal(s.mutationPicks, 1);
-  assert.equal(s.mutationOffer, null);
-  s.mutations.volatile = 1;
+  assert.equal(chooseRune(s, offer[0]), true);
+  assert.equal(s.runePicks, 1);
+  assert.equal(s.runeOffer, null);
+  s.runes.kenaz = 1;
   assert.equal(computeStats(s).blastRings, 3);
-  s.runBestPlanet = 5;
-  molt(s);
-  assert.equal(s.mutations.volatile, 0);
-  assert.equal(s.mutationPicks, 0);
+  s.runBestRegion = 5;
+  passSaga(s);
+  assert.equal(s.runes.kenaz, 0);
+  assert.equal(s.runePicks, 0);
 });
 
 test('a choice the player has not made never expires or blocks play', () => {
   const s = newGame(8);
-  s.mutationPicks = 3;
+  s.runePicks = 3;
   for (let i = 0; i < 30 * 60; i++) {
     step(s, TICK);
     s.events.length = 0;
   }
-  assert.ok(s.mutationPicks >= 3);
-  assert.ok(s.biomass > 0);
+  assert.ok(s.runePicks >= 3);
+  assert.ok(s.silver > 0);
 });
 
-test('frenzy needs a full charge', () => {
+test('berserk needs a full charge', () => {
   const s = newGame(2);
-  assert.equal(triggerFrenzy(s), false);
-  s.frenzyCharge = 1;
-  assert.equal(triggerFrenzy(s), true);
-  assert.equal(s.frenzyCharge, 0);
+  assert.equal(triggerBerserk(s), false);
+  s.berserkCharge = 1;
+  assert.equal(triggerBerserk(s), true);
+  assert.equal(s.berserkCharge, 0);
 });
 
-test('molt is gated, pays chitin and keeps perks', () => {
+test('passing the saga is gated, pays glory and keeps perks', () => {
   const s = newGame(3);
-  assert.equal(molt(s), false);
-  s.runBestPlanet = 5;
-  s.planetIndex = 5;
-  s.runBiomass = 1e7;
-  s.upgrades.jaws = 50;
-  s.perks.hide = 2;
-  const gain = chitinPreview(s);
+  assert.equal(passSaga(s), false);
+  s.runBestRegion = 5;
+  s.regionIndex = 5;
+  s.runSilver = 1e7;
+  s.upgrades.drill = 50;
+  s.perks.hoard = 2;
+  const gain = gloryPreview(s);
   assert.ok(gain > 0);
-  assert.equal(molt(s), true);
-  assert.equal(s.chitin, gain);
-  assert.equal(s.upgrades.jaws, 0);
-  assert.equal(s.perks.hide, 2);
-  assert.equal(s.planetIndex, 0);
+  assert.equal(passSaga(s), true);
+  assert.equal(s.glory, gain);
+  assert.equal(s.upgrades.drill, 0);
+  assert.equal(s.perks.hoard, 2);
+  assert.equal(s.regionIndex, 0);
 });
 
-test('save round-trips progress, including chewed cells', () => {
+test('save round-trips progress, including mined cells', () => {
   const s = newGame(4);
   for (let i = 0; i < 30 * 40; i++) {
     step(s, TICK);
     s.events.length = 0;
   }
-  s.upgrades.gut = 9;
+  s.upgrades.smelter = 9;
   const loaded = deserialize(serialize(s, 1000));
   assert.ok(loaded);
-  assert.equal(loaded.biomass, s.biomass);
-  assert.equal(loaded.upgrades.gut, 9);
-  assert.equal(loaded.planet.remaining, s.planet.remaining);
-  assert.deepEqual(loaded.planet.kind, s.planet.kind);
+  assert.equal(loaded.silver, s.silver);
+  assert.equal(loaded.upgrades.smelter, 9);
+  assert.equal(loaded.region.remaining, s.region.remaining);
+  assert.deepEqual(loaded.region.kind, s.region.kind);
 });
 
 test('bad save text is rejected, not fatal', () => {

@@ -63,7 +63,7 @@ export class Sound {
     this.burst(900 + Math.random() * 900, 0.07, 0.07);
   }
 
-  nectar(): void {
+  gold(): void {
     this.tone(660 + Math.random() * 220, 1100, 0.12, 0.05, 'triangle');
   }
 
@@ -72,22 +72,25 @@ export class Sound {
     this.tone(140, 40, 0.3, 0.12, 'sine');
   }
 
-  heart(): void {
+  core(): void {
     this.burst(120, 0.4, 0.4);
     this.tone(180, 26, 1.2, 0.3, 'sine');
     this.tone(90, 22, 1.4, 0.2, 'sawtooth');
   }
 
-  frenzy(): void {
-    this.tone(220, 880, 0.35, 0.12, 'sawtooth');
+  berserk(): void {
+    // A war horn: two low, rough notes rising together.
+    this.tone(110, 165, 0.5, 0.14, 'sawtooth');
+    this.tone(165, 247, 0.5, 0.08, 'sawtooth');
   }
 
   buy(): void {
     this.tone(420, 620, 0.07, 0.04, 'square');
   }
 
-  mutate(): void {
-    this.tone(300, 900, 0.3, 0.1, 'triangle');
-    this.tone(450, 1350, 0.3, 0.06, 'triangle');
+  carve(): void {
+    // A chisel tap, then the rune answering.
+    this.burst(2400, 0.05, 0.1);
+    this.tone(520, 780, 0.25, 0.06, 'triangle');
   }
 }

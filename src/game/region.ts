@@ -1,8 +1,8 @@
-import { BLOCK, PLANET } from './config.ts';
+import { BLOCK, REGION } from './config.ts';
 import { hexDistance, hexToWorldX, hexToWorldY, NEIGHBOURS, worldToHex } from './hex.ts';
 import { makeRng, type Rng } from './rng.ts';
 
-export interface Planet {
+export interface Region {
   index: number;
   seed: number;
   name: string;
@@ -20,42 +20,45 @@ export interface Planet {
   cells: Int32Array; // grid indices of every cell that started solid
   total: number;
   remaining: number;
-  heart: number; // grid index
+  core: number; // grid index
 }
 
-const NAME_A = ['Ossa', 'Vel', 'Mir', 'Kho', 'Thessa', 'Ul', 'Nyx', 'Bara', 'Sol', 'Quor', 'Ae', 'Zhen', 'Ira', 'Dun'];
-const NAME_B = ['thar', 'ion', 'ara', 'mos', 'ite', 'ula', 'esh', 'oma', 'ith', 'ek', 'une', 'axis'];
-const NAME_C = ['Prime', 'Minor', 'Major', 'IV', 'VII', 'Deep', 'Reach', 'Hollow', 'Rest', ''];
+const NAME_A = ['Skarn', 'Jarn', 'Grim', 'Ulf', 'Hrafn', 'Stein', 'Kol', 'Myrk', 'Thorn', 'Bjorn', 'Vig', 'Eld', 'Frost', 'Sig'];
+const NAME_B = ['holt', 'fell', 'gard', 'vik', 'dal', 'mark', 'fjord', 'berg', 'nes', 'stad', 'haug', 'heim'];
+const NAME_C = ['Deep', 'Reach', 'Hollow', 'Shaft', 'Seam', 'Barrow', 'Cut', '', '', ''];
 
-function planetName(rng: Rng): string {
+// Midgard's stone: slate, rust, moss, iron and so on. The renderer keeps these muted.
+const STONE_HUES = [215, 28, 150, 200, 8, 265, 45];
+
+function regionName(rng: Rng): string {
   const pick = (list: string[]) => list[Math.floor(rng() * list.length)];
   return `${pick(NAME_A)}${pick(NAME_B)} ${pick(NAME_C)}`.trim();
 }
 
 const idx = (p: { radius: number; size: number }, q: number, r: number) => q + p.radius + (r + p.radius) * p.size;
 
-export function planetRadius(index: number): number {
-  return Math.min(PLANET.maxRadius, PLANET.baseRadius + Math.floor(index / PLANET.radiusEvery));
+export function regionRadius(index: number): number {
+  return Math.min(REGION.maxRadius, REGION.baseRadius + Math.floor(index / REGION.radiusEvery));
 }
 
-export function planetHpScale(index: number): number {
-  return PLANET.hpBase * PLANET.hpGrowth ** index;
+export function regionHpScale(index: number): number {
+  return REGION.hpBase * REGION.hpGrowth ** index;
 }
 
-export function planetValueScale(index: number): number {
-  return PLANET.valueBase * PLANET.valueGrowth ** index;
+export function regionValueScale(index: number): number {
+  return REGION.valueBase * REGION.valueGrowth ** index;
 }
 
-export function makePlanet(index: number, seed: number): Planet {
+export function makeRegion(index: number, seed: number): Region {
   const rng = makeRng(seed);
-  const radius = planetRadius(index);
+  const radius = regionRadius(index);
   const size = radius * 2 + 1;
   const n = size * size;
-  const p: Planet = {
+  const p: Region = {
     index,
     seed,
-    name: planetName(rng),
-    hue: 150 + ((index * 47) % 170),
+    name: regionName(rng),
+    hue: STONE_HUES[index % STONE_HUES.length],
     radius,
     worldRadius: 0,
     size,
@@ -69,7 +72,7 @@ export function makePlanet(index: number, seed: number): Planet {
     cells: new Int32Array(0),
     total: 0,
     remaining: 0,
-    heart: 0,
+    core: 0,
   };
 
   // Lumpy outline: a disc pushed in and out by a few slow waves.
@@ -87,14 +90,14 @@ export function makePlanet(index: number, seed: number): Planet {
       p.wy[i] = hexToWorldY(r);
       const angle = Math.atan2(p.wy[i], p.wx[i]);
       if (d > edgeAt(angle) + 0.5) continue;
-      p.kind[i] = BLOCK.CRUST;
+      p.kind[i] = BLOCK.ROCK;
       p.depth[i] = d / radius;
       cells.push(i);
     }
   }
 
-  // Veins of nectar wander through the crust.
-  const veins = PLANET.nectarVeins + Math.floor(radius * PLANET.nectarVeinsPerRing);
+  // Veins of gold wander through the rock.
+  const veins = REGION.goldVeins + Math.floor(radius * REGION.goldVeinsPerRing);
   for (let v = 0; v < veins; v++) {
     let q = Math.floor(rng() * size) - radius;
     let r = Math.floor(rng() * size) - radius;
@@ -102,7 +105,7 @@ export function makePlanet(index: number, seed: number): Planet {
     for (let s = 0; s < steps; s++) {
       if (hexDistance(q, r) <= radius) {
         const i = idx(p, q, r);
-        if (p.kind[i] === BLOCK.CRUST) p.kind[i] = BLOCK.NECTAR;
+        if (p.kind[i] === BLOCK.ROCK) p.kind[i] = BLOCK.GOLD;
       }
       const [dq, dr] = NEIGHBOURS[Math.floor(rng() * 6)];
       q += dq;
@@ -111,32 +114,32 @@ export function makePlanet(index: number, seed: number): Planet {
   }
 
   for (const i of cells) {
-    if (p.kind[i] !== BLOCK.CRUST) continue;
+    if (p.kind[i] !== BLOCK.ROCK) continue;
     const roll = rng();
-    if (roll < PLANET.pulseChance) p.kind[i] = BLOCK.PULSE;
-    else if (roll < PLANET.pulseChance + PLANET.blisterChance) p.kind[i] = BLOCK.BLISTER;
+    if (roll < REGION.meadChance) p.kind[i] = BLOCK.MEAD;
+    else if (roll < REGION.meadChance + REGION.gasChance) p.kind[i] = BLOCK.GAS;
   }
 
-  const hpScale = planetHpScale(index);
-  const valueScale = planetValueScale(index);
+  const hpScale = regionHpScale(index);
+  const valueScale = regionValueScale(index);
   let totalHp = 0;
   let totalValue = 0;
   for (const i of cells) {
-    const depthMul = 1 + PLANET.depthBonus * (1 - p.depth[i]) ** 1.5;
-    const nectar = p.kind[i] === BLOCK.NECTAR;
-    p.maxHp[i] = hpScale * depthMul * (nectar ? PLANET.nectarHp : 1);
+    const depthMul = 1 + REGION.depthBonus * (1 - p.depth[i]) ** 1.5;
+    const gold = p.kind[i] === BLOCK.GOLD;
+    p.maxHp[i] = hpScale * depthMul * (gold ? REGION.goldHp : 1);
     p.hp[i] = p.maxHp[i];
-    p.value[i] = valueScale * depthMul * (nectar ? PLANET.nectarValue : 1);
+    p.value[i] = valueScale * depthMul * (gold ? REGION.goldValue : 1);
     totalHp += p.maxHp[i];
     totalValue += p.value[i];
   }
 
-  const heart = idx(p, 0, 0);
-  p.heart = heart;
-  p.kind[heart] = BLOCK.HEART;
-  p.maxHp[heart] = totalHp * PLANET.heartHpShare;
-  p.hp[heart] = p.maxHp[heart];
-  p.value[heart] = totalValue * PLANET.heartValueShare;
+  const core = idx(p, 0, 0);
+  p.core = core;
+  p.kind[core] = BLOCK.CORE;
+  p.maxHp[core] = totalHp * REGION.coreHpShare;
+  p.hp[core] = p.maxHp[core];
+  p.value[core] = totalValue * REGION.coreValueShare;
 
   p.cells = Int32Array.from(cells);
   p.total = cells.length;
@@ -147,8 +150,8 @@ export function makePlanet(index: number, seed: number): Planet {
 
 const scratch = { q: 0, r: 0 };
 
-/** Grid index of the planet cell at a world position, or -1 outside the grid. */
-export function cellAt(p: Planet, x: number, y: number): number {
+/** Grid index of the region cell at a world position, or -1 outside the grid. */
+export function cellAt(p: Region, x: number, y: number): number {
   worldToHex(x, y, scratch);
   const { q, r } = scratch;
   if (hexDistance(q, r) > p.radius) return -1;
@@ -156,7 +159,7 @@ export function cellAt(p: Planet, x: number, y: number): number {
 }
 
 /** Grid index of a neighbouring cell, or -1 outside the grid. */
-export function neighbourOf(p: Planet, i: number, dir: number): number {
+export function neighbourOf(p: Region, i: number, dir: number): number {
   const q = (i % p.size) - p.radius + NEIGHBOURS[dir][0];
   const r = Math.floor(i / p.size) - p.radius + NEIGHBOURS[dir][1];
   if (hexDistance(q, r) > p.radius) return -1;
@@ -164,7 +167,7 @@ export function neighbourOf(p: Planet, i: number, dir: number): number {
 }
 
 /** Calls fn for every cell within `rings` of the centre cell, including the centre. */
-export function forEachInRange(p: Planet, i: number, rings: number, fn: (cell: number) => void): void {
+export function forEachInRange(p: Region, i: number, rings: number, fn: (cell: number) => void): void {
   const cq = (i % p.size) - p.radius;
   const cr = Math.floor(i / p.size) - p.radius;
   for (let dq = -rings; dq <= rings; dq++) {
