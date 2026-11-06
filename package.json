@@ -1,0 +1,19 @@
+{
+  "name": "wyrmhole",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "node --test tests/*.test.ts",
+    "balance": "node tools/balance.ts",
+    "icons": "node tools/make-icons.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
